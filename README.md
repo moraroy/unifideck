@@ -45,7 +45,7 @@ That's it! All other tools and dependencies are bundled with the plugin.
 
 ## Installation
 
-1. Download the plugin ZIP file: https://github.com/mubaraknumann/UNIFIDECK/releases/latest/download/unifideck-plugin.zip
+1. Download the plugin ZIP file: https://github.com/user-attachments/files/24423959/unifideck-plugin-v0.2.0.zip
 2. Open **Quick Access Menu** (three dots button)
 3. Navigate to **Decky** → **Settings** (gear icon)
 4. Enable **Developer Mode** if not already enabled
