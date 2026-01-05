@@ -134,7 +134,7 @@ The following Decky plugins were studied as reference during development:
 - **[SteamGridDB Decky](https://github.com/SteamGridDB/decky-steamgriddb)** - For SteamGridDB API integration and artwork downloading
 - **[ProtonDB Decky](https://github.com/OMGDuke/protondb-decky)** - For game compatibility rating integration patterns
 - **[HeroicGamesLauncher](https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher)** - For Epic and GOG launcher integration approaches
-- **[Junkstore](https://github.com/Tormak9970/decky-junkstore)** - For non-Steam game management and shortcuts.vdf manipulation
+- **[Junkstore](https://github.com/ebenbruyns/junkstore)** - For non-Steam game management and authentication references
 
 ### Special Thanks
 - **Valve** - For the Steam Deck platform and Steam OS
