@@ -1026,6 +1026,7 @@ const Content: VFC = () => {
         success: boolean;
         epic_count: number;
         gog_count: number;
+        amazon_count: number;
         added_count: number;
         artwork_count: number;
         updated_count?: number;
@@ -1034,7 +1035,8 @@ const Content: VFC = () => {
       console.log("[Unifideck] ========== SYNC COMPLETED ==========");
       console.log(`[Unifideck] Epic Games: ${syncResult.epic_count}`);
       console.log(`[Unifideck] GOG Games: ${syncResult.gog_count}`);
-      console.log(`[Unifideck] Total Games: ${syncResult.epic_count + syncResult.gog_count}`);
+      console.log(`[Unifideck] Amazon Games: ${syncResult.amazon_count || 0}`);
+      console.log(`[Unifideck] Total Games: ${syncResult.epic_count + syncResult.gog_count + (syncResult.amazon_count || 0)}`);
       console.log(`[Unifideck] Games Added: ${syncResult.added_count}`);
       console.log(`[Unifideck] Artwork Fetched: ${syncResult.artwork_count}`);
       console.log("[Unifideck] =====================================");
@@ -1405,7 +1407,7 @@ const Content: VFC = () => {
             <PanelSectionRow>
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 <div>
-                  Add Epic and GOG games to your Steam Deck library.
+                  Add Epic, GOG, and Amazon games to your Steam Deck library.
                 </div>
                 <div style={{ fontSize: "12px", opacity: 0.7 }}>
                   All your games under one roof.
@@ -1743,7 +1745,7 @@ const Content: VFC = () => {
                 overflow: 'auto'
               }}>
                 <h2 style={{ marginTop: 0 }}>
-                  {authDialog.store === 'epic' ? 'Epic Games' : 'GOG'} Authentication
+                  {authDialog.store === 'epic' ? 'Epic Games' : authDialog.store === 'amazon' ? 'Amazon Games' : 'GOG'} Authentication
                 </h2>
 
                 <div>
@@ -1814,7 +1816,7 @@ const Content: VFC = () => {
 export default definePlugin(() => {
   console.log("[Unifideck] Plugin loaded");
 
-  // Patch the library to add Unifideck tabs (All, Installed, Great on Deck, Steam, Epic, GOG)
+  // Patch the library to add Unifideck tabs (All, Installed, Great on Deck, Steam, Epic, GOG, Amazon)
   // This uses TabMaster's approach: intercept useMemo hook to inject custom tabs
   const libraryPatch = patchLibrary();
   console.log("[Unifideck] ✓ Library tabs patch registered");

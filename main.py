@@ -2197,19 +2197,17 @@ class AmazonConnector:
             # First sync library to get latest
             await self.sync_library()
 
-            # Then list games in JSON format
-            proc = await asyncio.create_subprocess_exec(
-                self.nile_bin, 'library', 'list', '--json',
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await proc.communicate()
-
-            if proc.returncode != 0:
-                logger.error(f"[Amazon] Library list failed: {stderr.decode()}")
+            # Read library directly from nile's library.json file
+            nile_config = os.path.expanduser("~/.config/nile")
+            library_file = os.path.join(nile_config, "library.json")
+            
+            if not os.path.exists(library_file):
+                logger.warning("[Amazon] library.json not found")
                 return []
+            
+            with open(library_file, 'r') as f:
+                games_data = json.load(f)
 
-            games_data = json.loads(stdout.decode())
             games = []
 
             # Get installed games to mark install status
@@ -2236,7 +2234,7 @@ class AmazonConnector:
             return games
 
         except Exception as e:
-            logger.error(f"[Amazon] Error fetching library: {e}")
+            logger.error(f"[Amazon] Error fetching library: {e}", exc_info=True)
             return []
 
     async def get_installed(self) -> Dict[str, Any]:
@@ -4418,6 +4416,7 @@ class Plugin:
                 # Get games from all stores
                 epic_games = await self.epic.get_library()
                 gog_games = await self.gog.get_library()
+                amazon_games = await self.amazon.get_library()
 
                 # Check for cancellation
                 if self._cancel_sync:
@@ -4430,11 +4429,12 @@ class Plugin:
                         'cancelled': True,
                         'epic_count': 0,
                         'gog_count': 0,
+                        'amazon_count': 0,
                         'added_count': 0,
                         'artwork_count': 0
                     }
 
-                all_games = epic_games + gog_games
+                all_games = epic_games + gog_games + amazon_games
                 self.sync_progress.total_games = len(all_games)
                 self.sync_progress.synced_games = 0
 
@@ -4445,6 +4445,7 @@ class Plugin:
                 # Get installed games
                 epic_installed = await self.epic.get_installed()
                 gog_installed = await self.gog.get_installed()
+                amazon_installed = await self.amazon.get_installed()
 
                 # Mark installed status
                 for game in epic_games:
@@ -4487,6 +4488,17 @@ class Plugin:
                             work_dir = os.path.dirname(exe_path)
                             await self.shortcuts_manager._update_game_map('gog', game.id, exe_path, work_dir)
                             logger.debug(f"Updated games.map for GOG game {game.id}")
+
+                for game in amazon_games:
+                    if game.id in amazon_installed:
+                        game.is_installed = True
+                        # Ensure games.map is updated for Amazon games
+                        game_info = self.amazon.get_installed_game_info(game.id)
+                        if game_info and game_info.get('executable'):
+                            exe_path = game_info['executable']
+                            work_dir = os.path.dirname(exe_path)
+                            await self.shortcuts_manager._update_game_map('amazon', game.id, exe_path, work_dir)
+                            logger.debug(f"Updated games.map for Amazon game {game.id}")
 
                 # Get launcher script path (relative to plugin directory)
                 launcher_script = os.path.join(os.path.dirname(__file__), 'bin', 'unifideck-launcher')
@@ -4632,6 +4644,7 @@ class Plugin:
                     'success': True,
                     'epic_count': len(epic_games),
                     'gog_count': len(gog_games),
+                    'amazon_count': len(amazon_games),
                     'added_count': added_count,
                     'artwork_count': artwork_count
                 }

@@ -297,7 +297,7 @@ function meetsGreatOnDeckCriteria(compat) {
  * Unifideck Tab Filters
  *
  * Filters for creating custom library tabs that include
- * Steam, Epic, and GOG games with proper store detection.
+ * Steam, Epic, GOG, and Amazon games with proper store detection.
  */
 // Non-Steam shortcut app_type value
 const NON_STEAM_APP_TYPE = 1073741824;
@@ -394,7 +394,7 @@ const filterFunctions = {
         }
         return app.app_type === NON_STEAM_APP_TYPE;
     },
-    // Filter by store (Steam, Epic, GOG)
+    // Filter by store (Steam, Epic, GOG, Amazon)
     store: (params, app) => {
         if (params.store === 'all')
             return true;
@@ -412,7 +412,7 @@ const filterFunctions = {
         if (app.steam_deck_compat_category === DECK_VERIFIED) {
             return true;
         }
-        // For Unifideck games (Epic/GOG), use title-based compatibility lookup
+        // For Unifideck games (Epic/GOG/Amazon), use title-based compatibility lookup
         const cached = unifideckGameCache.get(app.appid);
         if (cached) {
             // Use app's display_name for title-based search
@@ -469,10 +469,10 @@ function runFilters(filters, app) {
  * Unifideck Tab Container
  *
  * Manages custom tabs for the Steam library that include
- * Epic and GOG games alongside Steam games.
+ * Epic, GOG, and Amazon games alongside Steam games.
  */
 
-// Default Unifideck tabs - ORDERED: Great on Deck, All Games, Installed, Steam, Epic, GOG, Non-Steam
+// Default Unifideck tabs - ORDERED: Great on Deck, All Games, Installed, Steam, Epic, GOG, Amazon, Non-Steam
 const UNIFIDECK_TABS = [
     {
         id: 'unifideck-deck',
@@ -511,9 +511,15 @@ const UNIFIDECK_TABS = [
         filters: [{ type: 'store', params: { store: 'gog' } }]
     },
     {
+        id: 'unifideck-amazon',
+        title: 'Amazon',
+        position: 6,
+        filters: [{ type: 'store', params: { store: 'amazon' } }]
+    },
+    {
         id: 'unifideck-nonsteam',
         title: 'Non-Steam',
-        position: 6,
+        position: 7,
         filters: [{ type: 'nonSteam', params: {} }] // All non-Steam shortcuts except non-installed Unifideck
     }
 ];
@@ -638,6 +644,7 @@ class TabManager {
         this.cacheLoaded = false;
         this.epicGameCount = 0;
         this.gogGameCount = 0;
+        this.amazonGameCount = 0;
     }
     async initialize() {
         if (this.initialized)
@@ -667,8 +674,9 @@ class TabManager {
                 // Count games by store for tab visibility
                 this.epicGameCount = games.filter((g) => g.store === 'epic').length;
                 this.gogGameCount = games.filter((g) => g.store === 'gog').length;
-                console.log(`[Unifideck] Loaded ${games.length} games into cache (Epic: ${this.epicGameCount}, GOG: ${this.gogGameCount})`);
-                // Prefetch compatibility info (ProtonDB + Deck Verified) for Epic/GOG games
+                this.amazonGameCount = games.filter((g) => g.store === 'amazon').length;
+                console.log(`[Unifideck] Loaded ${games.length} games into cache (Epic: ${this.epicGameCount}, GOG: ${this.gogGameCount}, Amazon: ${this.amazonGameCount})`);
+                // Prefetch compatibility info (ProtonDB + Deck Verified) for Epic/GOG/Amazon games
                 const titles = games
                     .filter((g) => g.title)
                     .map((g) => g.title);
@@ -700,6 +708,9 @@ class TabManager {
         if (tabId === 'unifideck-gog' && this.gogGameCount === 0) {
             return false;
         }
+        if (tabId === 'unifideck-amazon' && this.amazonGameCount === 0) {
+            return false;
+        }
         return true;
     }
     isInitialized() {
@@ -723,7 +734,7 @@ const tabManager = new TabManager();
  * Unifideck Library Patch
  *
  * Patches the Steam library to inject custom tabs that include
- * Epic and GOG games alongside Steam games.
+ * Epic, GOG, and Amazon games alongside Steam games.
  *
  * When TabMaster is detected, custom tabs are NOT injected - instead,
  * users can use [Unifideck] collections via TabMaster.
@@ -1099,7 +1110,7 @@ function formatETA(seconds) {
  * Store icon based on store type
  */
 const StoreIcon = ({ store }) => {
-    const color = store === "epic" ? "#0078f2" : "#a855f7";
+    const color = store === "epic" ? "#0078f2" : store === "amazon" ? "#FF9900" : "#a855f7";
     return (SP_JSX.jsx("span", { style: {
             display: "inline-block",
             width: "8px",
@@ -1933,7 +1944,8 @@ const Content = () => {
             console.log("[Unifideck] ========== SYNC COMPLETED ==========");
             console.log(`[Unifideck] Epic Games: ${syncResult.epic_count}`);
             console.log(`[Unifideck] GOG Games: ${syncResult.gog_count}`);
-            console.log(`[Unifideck] Total Games: ${syncResult.epic_count + syncResult.gog_count}`);
+            console.log(`[Unifideck] Amazon Games: ${syncResult.amazon_count || 0}`);
+            console.log(`[Unifideck] Total Games: ${syncResult.epic_count + syncResult.gog_count + (syncResult.amazon_count || 0)}`);
             console.log(`[Unifideck] Games Added: ${syncResult.added_count}`);
             console.log(`[Unifideck] Artwork Fetched: ${syncResult.artwork_count}`);
             console.log("[Unifideck] =====================================");
@@ -2223,7 +2235,7 @@ const Content = () => {
                                         justifyContent: "flex-start",
                                         display: "flex",
                                         alignItems: "center",
-                                    }, children: "\u2B07\uFE0F Downloads" })] }) }) }) }), activeTab === 'downloads' && (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DownloadsTab, {}), SP_JSX.jsx(StorageSettings, {})] })), activeTab === 'settings' && (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSection, { title: "Unifideck Settings", children: SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "10px" }, children: [SP_JSX.jsx("div", { children: "Add Epic and GOG games to your Steam Deck library." }), SP_JSX.jsx("div", { style: { fontSize: "12px", opacity: 0.7 }, children: "All your games under one roof." })] }) }) }), SP_JSX.jsxs(DFL.PanelSection, { title: "Epic Games", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }, children: SP_JSX.jsxs("div", { style: { fontSize: "14px" }, children: ["Status: ", storeStatus.epic === "Connected" ? "✓ Connected" :
+                                    }, children: "\u2B07\uFE0F Downloads" })] }) }) }) }), activeTab === 'downloads' && (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DownloadsTab, {}), SP_JSX.jsx(StorageSettings, {})] })), activeTab === 'settings' && (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSection, { title: "Unifideck Settings", children: SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "10px" }, children: [SP_JSX.jsx("div", { children: "Add Epic, GOG, and Amazon games to your Steam Deck library." }), SP_JSX.jsx("div", { style: { fontSize: "12px", opacity: 0.7 }, children: "All your games under one roof." })] }) }) }), SP_JSX.jsxs(DFL.PanelSection, { title: "Epic Games", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }, children: SP_JSX.jsxs("div", { style: { fontSize: "14px" }, children: ["Status: ", storeStatus.epic === "Connected" ? "✓ Connected" :
                                                 storeStatus.epic === "Legendary not installed" ? "⚠️ Installing..." :
                                                     storeStatus.epic === "Checking..." ? "Checking..." :
                                                         storeStatus.epic.includes("Error") ? `❌ ${storeStatus.epic}` :
@@ -2310,7 +2322,7 @@ const Content = () => {
                                 width: '90%',
                                 maxHeight: '80vh',
                                 overflow: 'auto'
-                            }, children: [SP_JSX.jsxs("h2", { style: { marginTop: 0 }, children: [authDialog.store === 'epic' ? 'Epic Games' : 'GOG', " Authentication"] }), SP_JSX.jsxs("div", { children: [SP_JSX.jsx("div", { style: { marginBottom: '15px', fontSize: '14px' }, children: authDialog.processing ? (SP_JSX.jsxs("div", { children: [SP_JSX.jsx("p", { children: "Please complete the login in the popup window." }), SP_JSX.jsx("p", { style: { fontSize: '0.9em', color: '#888', marginTop: '5px' }, children: "The window will close automatically after authentication." }), SP_JSX.jsxs("div", { style: { marginTop: '20px', textAlign: 'center' }, children: [SP_JSX.jsx("div", { style: { fontSize: '32px' }, children: "\u23F3" }), SP_JSX.jsx("p", { style: { fontSize: '12px', opacity: 0.7, marginTop: '10px' }, children: "Waiting for authentication..." })] })] })) : (SP_JSX.jsx("div", { children: SP_JSX.jsx("p", { children: "\u2713 Ready to authenticate" }) })) }), authDialog.error && (SP_JSX.jsxs("div", { style: {
+                            }, children: [SP_JSX.jsxs("h2", { style: { marginTop: 0 }, children: [authDialog.store === 'epic' ? 'Epic Games' : authDialog.store === 'amazon' ? 'Amazon Games' : 'GOG', " Authentication"] }), SP_JSX.jsxs("div", { children: [SP_JSX.jsx("div", { style: { marginBottom: '15px', fontSize: '14px' }, children: authDialog.processing ? (SP_JSX.jsxs("div", { children: [SP_JSX.jsx("p", { children: "Please complete the login in the popup window." }), SP_JSX.jsx("p", { style: { fontSize: '0.9em', color: '#888', marginTop: '5px' }, children: "The window will close automatically after authentication." }), SP_JSX.jsxs("div", { style: { marginTop: '20px', textAlign: 'center' }, children: [SP_JSX.jsx("div", { style: { fontSize: '32px' }, children: "\u23F3" }), SP_JSX.jsx("p", { style: { fontSize: '12px', opacity: 0.7, marginTop: '10px' }, children: "Waiting for authentication..." })] })] })) : (SP_JSX.jsx("div", { children: SP_JSX.jsx("p", { children: "\u2713 Ready to authenticate" }) })) }), authDialog.error && (SP_JSX.jsxs("div", { style: {
                                                 marginBottom: '15px',
                                                 padding: '10px',
                                                 backgroundColor: '#5c1f1f',
@@ -2328,7 +2340,7 @@ const Content = () => {
 };
 var index = definePlugin(() => {
     console.log("[Unifideck] Plugin loaded");
-    // Patch the library to add Unifideck tabs (All, Installed, Great on Deck, Steam, Epic, GOG)
+    // Patch the library to add Unifideck tabs (All, Installed, Great on Deck, Steam, Epic, GOG, Amazon)
     // This uses TabMaster's approach: intercept useMemo hook to inject custom tabs
     const libraryPatch = patchLibrary();
     console.log("[Unifideck] ✓ Library tabs patch registered");
