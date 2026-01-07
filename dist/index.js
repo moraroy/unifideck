@@ -1131,23 +1131,26 @@ const DownloadItemRow = ({ item, isCurrent, onCancel, onClear }) => {
         cancelled: "#f59e0b",
         error: "#ef4444",
     };
+    // For completed/error/cancelled items, use PanelSectionRow with ButtonItem
+    if ((item.status === "completed" || item.status === "error" || item.status === "cancelled") && onClear) {
+        return (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs(DFL.Focusable, { style: { display: "flex", alignItems: "center", gap: "12px" }, children: [SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", flex: 1, gap: "8px", minWidth: 0 }, children: [SP_JSX.jsx(StoreIcon, { store: item.store }), SP_JSX.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [SP_JSX.jsx("div", { style: { fontWeight: "bold", fontSize: "14px" }, children: item.game_title }), SP_JSX.jsxs("div", { style: { fontSize: "12px", color: statusColors[item.status] }, children: [item.status === "completed" && SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(FaCheck, { size: 10 }), " Completed"] }), item.status === "error" && SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(FaExclamationTriangle, { size: 10 }), " Error"] }), item.status === "cancelled" && "Cancelled"] })] })] }), SP_JSX.jsx(DFL.DialogButton, { onClick: () => onClear(item.id), style: {
+                            padding: "6px",
+                            minWidth: "24px",
+                            width: "24px",
+                            height: "24px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                        }, children: SP_JSX.jsx(FaTimes, { size: 10 }) })] }) }));
+    }
+    // For active downloads (downloading/queued), keep the custom styled container
     return (SP_JSX.jsxs("div", { style: {
             backgroundColor: "#1e2329",
             borderRadius: "8px",
             padding: "12px",
             marginBottom: "8px",
             border: isCurrent ? "1px solid #1a9fff" : "1px solid #333",
-        }, children: [SP_JSX.jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }, children: [SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", flex: 1 }, children: [SP_JSX.jsx(StoreIcon, { store: item.store }), SP_JSX.jsx("span", { style: { fontWeight: "bold", color: "#fff", fontSize: "14px" }, children: item.game_title })] }), (item.status === "completed" || item.status === "error" || item.status === "cancelled") && onClear && (SP_JSX.jsx(DFL.DialogButton, { onClick: () => onClear(item.id), style: {
-                            padding: "0",
-                            width: "20px",
-                            height: "20px",
-                            minWidth: "auto",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            backgroundColor: "transparent",
-                            color: "#666",
-                        }, children: SP_JSX.jsx(FaTimes, { size: 10 }) }))] }), (item.status === "downloading" || item.status === "queued") && (SP_JSX.jsx("div", { style: { marginBottom: "8px" }, children: SP_JSX.jsxs(DFL.DialogButton, { onClick: () => onCancel(item.id), style: {
+        }, children: [SP_JSX.jsx("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }, children: SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", flex: 1 }, children: [SP_JSX.jsx(StoreIcon, { store: item.store }), SP_JSX.jsx("span", { style: { fontWeight: "bold", color: "#fff", fontSize: "14px" }, children: item.game_title })] }) }), (item.status === "downloading" || item.status === "queued") && (SP_JSX.jsx("div", { style: { marginBottom: "8px" }, children: SP_JSX.jsxs(DFL.DialogButton, { onClick: () => onCancel(item.id), style: {
                         padding: "4px 12px",
                         minWidth: "auto",
                         backgroundColor: "rgba(239, 68, 68, 0.2)",
