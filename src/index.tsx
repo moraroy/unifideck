@@ -1373,15 +1373,12 @@ const Content: FC = () => {
                 <div style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "2px",
-                  justifyContent: "center",
-                  fontSize: "0.85em",
-                  padding: "2px"
+                  gap: "8px",
+                  justifyContent: "center"
                 }}>
                   <FaSync style={{
                     animation: syncing ? "spin 1s linear infinite" : "none",
-                    opacity: syncCooldown ? 0.5 : 1,
-                    fontSize: "10px"
+                    opacity: syncCooldown ? 0.5 : 1
                   }} />
                   {syncing
                     ? "Syncing..."
@@ -1397,16 +1394,22 @@ const Content: FC = () => {
                 onClick={() => handleManualSync(true)}
                 disabled={syncing || syncCooldown}
               >
-                <FaSync style={{
-                  animation: syncing ? "spin 1s linear infinite" : "none",
-                  opacity: syncCooldown ? 0.5 : 1,
-                }} />
-                {" "}
-                {syncing
-                  ? "..."
-                  : syncCooldown
-                    ? `${cooldownSeconds}s`
-                    : "Force Sync"}
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  justifyContent: "center"
+                }}>
+                  <FaSync style={{
+                    animation: syncing ? "spin 1s linear infinite" : "none",
+                    opacity: syncCooldown ? 0.5 : 1
+                  }} />
+                  {syncing
+                    ? "..."
+                    : syncCooldown
+                      ? `${cooldownSeconds}s`
+                      : "Force Sync"}
+                </div>
               </ButtonItem>
             </PanelSectionRow>
 
