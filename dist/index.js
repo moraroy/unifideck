@@ -1153,19 +1153,7 @@ const DownloadItemRow = ({ item, isCurrent, onCancel, onClear }) => {
                         backgroundColor: "rgba(239, 68, 68, 0.2)",
                         color: "#ef4444",
                         fontSize: "12px",
-                    }, children: [SP_JSX.jsx(FaTimes, { size: 10, style: { marginRight: "4px" } }), " Cancel"] }) })), item.status === "downloading" && (SP_JSX.jsx(SP_JSX.Fragment, { children: item.progress_percent === 0 && item.downloaded_bytes === 0 ? (SP_JSX.jsx("div", { style: { fontSize: "12px", color: "#888", fontStyle: "italic" }, children: "Preparing download..." })) : (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx("div", { style: {
-                                width: "100%",
-                                height: "6px",
-                                backgroundColor: "#333",
-                                borderRadius: "3px",
-                                overflow: "hidden",
-                                marginBottom: "8px",
-                            }, children: SP_JSX.jsx("div", { style: {
-                                    width: `${item.progress_percent}%`,
-                                    height: "100%",
-                                    backgroundColor: "#1a9fff",
-                                    transition: "width 0.3s ease",
-                                } }) }), SP_JSX.jsxs("div", { style: { display: "flex", justifyContent: "space-between", fontSize: "12px", color: "#888" }, children: [SP_JSX.jsxs("span", { children: [item.progress_percent.toFixed(1), "%"] }), SP_JSX.jsxs("span", { children: [formatBytes(item.downloaded_bytes), " / ", formatBytes(item.total_bytes)] }), SP_JSX.jsxs("span", { children: [item.speed_mbps.toFixed(1), " MB/s"] }), SP_JSX.jsxs("span", { children: ["ETA: ", formatETA(item.eta_seconds)] })] })] })) })), item.status !== "downloading" && (SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", fontSize: "12px", color: statusColors[item.status] }, children: [item.status === "queued" && SP_JSX.jsx(FaDownload, { size: 10, style: { marginRight: "4px" } }), item.status === "completed" && SP_JSX.jsx(FaCheck, { size: 10, style: { marginRight: "4px" } }), item.status === "error" && SP_JSX.jsx(FaExclamationTriangle, { size: 10, style: { marginRight: "4px" } }), SP_JSX.jsx("span", { style: { textTransform: "capitalize" }, children: item.status }), item.error_message && (SP_JSX.jsxs("span", { style: { marginLeft: "8px", color: "#888" }, children: ["- ", item.error_message] }))] }))] }));
+                    }, children: [SP_JSX.jsx(FaTimes, { size: 10, style: { marginRight: "4px" } }), " Cancel"] }) })), item.status === "downloading" && (SP_JSX.jsx(SP_JSX.Fragment, { children: item.progress_percent === 0 && item.downloaded_bytes === 0 ? (SP_JSX.jsx("div", { style: { fontSize: "12px", color: "#888", fontStyle: "italic" }, children: "Preparing download..." })) : (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.ProgressBarWithInfo, { nProgress: item.progress_percent / 100, sOperationText: `${item.progress_percent.toFixed(1)}%`, bottomSeparator: "none" }), SP_JSX.jsxs("div", { style: { display: "flex", justifyContent: "space-between", fontSize: "12px", color: "#888", marginTop: "4px" }, children: [SP_JSX.jsxs("span", { children: [formatBytes(item.downloaded_bytes), " / ", formatBytes(item.total_bytes)] }), SP_JSX.jsxs("span", { children: [item.speed_mbps.toFixed(1), " MB/s"] }), SP_JSX.jsxs("span", { children: ["ETA: ", formatETA(item.eta_seconds)] })] })] })) })), item.status !== "downloading" && (SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", fontSize: "12px", color: statusColors[item.status] }, children: [item.status === "queued" && SP_JSX.jsx(FaDownload, { size: 10, style: { marginRight: "4px" } }), item.status === "completed" && SP_JSX.jsx(FaCheck, { size: 10, style: { marginRight: "4px" } }), item.status === "error" && SP_JSX.jsx(FaExclamationTriangle, { size: 10, style: { marginRight: "4px" } }), SP_JSX.jsx("span", { style: { textTransform: "capitalize" }, children: item.status }), item.error_message && (SP_JSX.jsxs("span", { style: { marginLeft: "8px", color: "#888" }, children: ["- ", item.error_message] }))] }))] }));
 };
 /**
  * Empty state display
@@ -1313,7 +1301,7 @@ const StorageSettings = () => {
         label: `${loc.label} (${loc.free_space_gb} GB free)`,
     }));
     const selectedOption = dropdownOptions.find((opt) => opt.data === defaultStorage);
-    return (SP_JSX.jsxs(DFL.PanelSection, { title: "DOWNLOAD SETTINGS", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Install Location", description: "Where new games will be downloaded", children: dropdownOptions.length > 0 ? (SP_JSX.jsx(DFL.Dropdown, { rgOptions: dropdownOptions, selectedOption: selectedOption?.data, onChange: handleStorageChange, disabled: saving })) : (SP_JSX.jsx("span", { style: { color: "#888", fontSize: "12px" }, children: "Loading storage options..." })) }) }), locations.length > 0 && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Path", children: SP_JSX.jsx("span", { style: { color: "#888", fontSize: "12px" }, children: locations.find((l) => l.id === defaultStorage)?.path || "Unknown" }) }) }))] }));
+    return (SP_JSX.jsxs(DFL.PanelSection, { title: "DOWNLOAD SETTINGS", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Install Location", description: "Where new games will be downloaded", children: dropdownOptions.length > 0 ? (SP_JSX.jsx(DFL.Dropdown, { rgOptions: dropdownOptions, selectedOption: selectedOption?.data, onChange: handleStorageChange, disabled: saving })) : (SP_JSX.jsx(DFL.Field, { description: "Loading storage options..." })) }) }), locations.length > 0 && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Path", description: locations.find((l) => l.id === defaultStorage)?.path || "Unknown" }) }))] }));
 };
 
 // ========== INSTALL BUTTON FEATURE ==========
@@ -2206,47 +2194,18 @@ const Content = () => {
             console.error("[Unifideck] Error cancelling sync:", error);
         }
     };
-    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSection, { children: SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { ref: mountRef, style: { width: "100%" }, children: SP_JSX.jsxs(DFL.Focusable, { style: {
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: "4px",
-                                width: "100%",
-                            }, children: [SP_JSX.jsx(DFL.DialogButton, { onClick: () => setActiveTab('settings'), style: {
-                                        width: "100%",
-                                        padding: "8px 12px",
-                                        fontSize: "13px",
-                                        backgroundColor: activeTab === 'settings' ? '#1a9fff' : 'transparent',
-                                        border: activeTab === 'settings' ? 'none' : '1px solid #444',
-                                        borderRadius: '4px',
-                                        fontWeight: activeTab === 'settings' ? 'bold' : 'normal',
-                                        textAlign: "left",
-                                        justifyContent: "flex-start",
-                                        display: "flex",
-                                        alignItems: "center",
-                                    }, children: "\u2699\uFE0F Settings" }), SP_JSX.jsx(DFL.DialogButton, { onClick: () => setActiveTab('downloads'), style: {
-                                        width: "100%",
-                                        padding: "8px 12px",
-                                        fontSize: "13px",
-                                        backgroundColor: activeTab === 'downloads' ? '#1a9fff' : 'transparent',
-                                        border: activeTab === 'downloads' ? 'none' : '1px solid #444',
-                                        borderRadius: '4px',
-                                        fontWeight: activeTab === 'downloads' ? 'bold' : 'normal',
-                                        textAlign: "left",
-                                        justifyContent: "flex-start",
-                                        display: "flex",
-                                        alignItems: "center",
-                                    }, children: "\u2B07\uFE0F Downloads" })] }) }) }) }), activeTab === 'downloads' && (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DownloadsTab, {}), SP_JSX.jsx(StorageSettings, {})] })), activeTab === 'settings' && (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSection, { title: "Unifideck Settings", children: SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "10px" }, children: [SP_JSX.jsx("div", { children: "Add Epic, GOG, and Amazon games to your Steam Deck library." }), SP_JSX.jsx("div", { style: { fontSize: "12px", opacity: 0.7 }, children: "All your games under one roof." })] }) }) }), SP_JSX.jsxs(DFL.PanelSection, { title: "Epic Games", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }, children: SP_JSX.jsxs("div", { style: { fontSize: "14px" }, children: ["Status: ", storeStatus.epic === "Connected" ? "✓ Connected" :
-                                                storeStatus.epic === "Legendary not installed" ? "⚠️ Installing..." :
-                                                    storeStatus.epic === "Checking..." ? "Checking..." :
-                                                        storeStatus.epic.includes("Error") ? `❌ ${storeStatus.epic}` :
-                                                            "✗ Not Connected"] }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { children: storeStatus.epic === "Connected" ? (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleLogout('epic'), children: SP_JSX.jsx("div", { style: { fontSize: "0.85em", padding: "2px" }, children: "Logout" }) })) : storeStatus.epic !== "Checking..." && !storeStatus.epic.includes("Error") && storeStatus.epic !== "Legendary not installed" ? (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => startAuth('epic'), children: SP_JSX.jsx("div", { style: { fontSize: "0.85em", padding: "2px" }, children: "Authenticate" }) })) : null }) }), storeStatus.epic === "Legendary not installed" && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { fontSize: '11px', opacity: 0.7 }, children: "Installing legendary CLI automatically..." }) }))] }), SP_JSX.jsxs(DFL.PanelSection, { title: "GOG", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }, children: SP_JSX.jsxs("div", { style: { fontSize: "14px" }, children: ["Status: ", storeStatus.gog === "Connected" ? "✓ Connected" :
-                                                storeStatus.gog === "Checking..." ? "Checking..." :
-                                                    storeStatus.gog.includes("Error") ? `❌ ${storeStatus.gog}` :
-                                                        "✗ Not Connected"] }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { children: storeStatus.gog === "Connected" ? (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleLogout('gog'), children: SP_JSX.jsx("div", { style: { fontSize: "0.85em", padding: "2px" }, children: "Logout" }) })) : storeStatus.gog !== "Checking..." && !storeStatus.gog.includes("Error") ? (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => startAuth('gog'), children: SP_JSX.jsx("div", { style: { fontSize: "0.85em", padding: "2px" }, children: "Authenticate" }) })) : null }) })] }), SP_JSX.jsxs(DFL.PanelSection, { title: "AMAZON GAMES", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }, children: SP_JSX.jsxs("div", { style: { fontSize: "14px" }, children: ["Status: ", storeStatus.amazon === "Connected" ? "✓ Connected" :
-                                                storeStatus.amazon === "Nile not installed" ? "⚠️ Missing CLI" :
-                                                    storeStatus.amazon === "Checking..." ? "Checking..." :
-                                                        storeStatus.amazon.includes("Error") ? `❌ ${storeStatus.amazon}` :
-                                                            "✗ Not Connected"] }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { children: storeStatus.amazon === "Connected" ? (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleLogout('amazon'), children: SP_JSX.jsx("div", { style: { fontSize: "0.85em", padding: "2px" }, children: "Logout" }) })) : storeStatus.amazon !== "Checking..." && !storeStatus.amazon.includes("Error") && storeStatus.amazon !== "Nile not installed" ? (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => startAuth('amazon'), children: SP_JSX.jsx("div", { style: { fontSize: "0.85em", padding: "2px" }, children: "Authenticate" }) })) : null }) }), storeStatus.amazon === "Nile not installed" && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { fontSize: '11px', opacity: 0.7 }, children: "Nile CLI not found. Amazon Games unavailable." }) }))] }), SP_JSX.jsxs(DFL.PanelSection, { title: "LIBRARY SYNC", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleManualSync(false), disabled: syncing || syncCooldown, children: SP_JSX.jsxs("div", { style: {
+    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => setActiveTab('settings'), disabled: activeTab === 'settings', children: SP_JSX.jsx("div", { ref: mountRef, children: "\u2699\uFE0F Settings" }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => setActiveTab('downloads'), disabled: activeTab === 'downloads', children: "\u2B07\uFE0F Downloads" }) })] }), activeTab === 'downloads' && (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DownloadsTab, {}), SP_JSX.jsx(StorageSettings, {})] })), activeTab === 'settings' && (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSection, { title: "Unifideck Settings", children: SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Add Epic, GOG, and Amazon games to your Steam Deck library.", description: "All your games under one roof." }) }) }), SP_JSX.jsxs(DFL.PanelSection, { title: "Epic Games", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Status", description: storeStatus.epic === "Connected" ? "✓ Connected" :
+                                        storeStatus.epic === "Legendary not installed" ? "⚠️ Installing..." :
+                                            storeStatus.epic === "Checking..." ? "Checking..." :
+                                                storeStatus.epic.includes("Error") ? `❌ ${storeStatus.epic}` :
+                                                    "✗ Not Connected" }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { children: storeStatus.epic === "Connected" ? (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleLogout('epic'), children: "Logout" })) : storeStatus.epic !== "Checking..." && !storeStatus.epic.includes("Error") && storeStatus.epic !== "Legendary not installed" ? (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => startAuth('epic'), children: "Authenticate" })) : null }) }), storeStatus.epic === "Legendary not installed" && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { description: "Installing legendary CLI automatically..." }) }))] }), SP_JSX.jsxs(DFL.PanelSection, { title: "GOG", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Status", description: storeStatus.gog === "Connected" ? "✓ Connected" :
+                                        storeStatus.gog === "Checking..." ? "Checking..." :
+                                            storeStatus.gog.includes("Error") ? `❌ ${storeStatus.gog}` :
+                                                "✗ Not Connected" }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { children: storeStatus.gog === "Connected" ? (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleLogout('gog'), children: "Logout" })) : storeStatus.gog !== "Checking..." && !storeStatus.gog.includes("Error") ? (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => startAuth('gog'), children: "Authenticate" })) : null }) })] }), SP_JSX.jsxs(DFL.PanelSection, { title: "AMAZON GAMES", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Status", description: storeStatus.amazon === "Connected" ? "✓ Connected" :
+                                        storeStatus.amazon === "Nile not installed" ? "⚠️ Missing CLI" :
+                                            storeStatus.amazon === "Checking..." ? "Checking..." :
+                                                storeStatus.amazon.includes("Error") ? `❌ ${storeStatus.amazon}` :
+                                                    "✗ Not Connected" }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { children: storeStatus.amazon === "Connected" ? (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleLogout('amazon'), children: "Logout" })) : storeStatus.amazon !== "Checking..." && !storeStatus.amazon.includes("Error") && storeStatus.amazon !== "Nile not installed" ? (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => startAuth('amazon'), children: "Authenticate" })) : null }) }), storeStatus.amazon === "Nile not installed" && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { description: "Nile CLI not found. Amazon Games unavailable." }) }))] }), SP_JSX.jsxs(DFL.PanelSection, { title: "LIBRARY SYNC", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleManualSync(false), disabled: syncing || syncCooldown, children: SP_JSX.jsxs("div", { style: {
                                             display: "flex",
                                             alignItems: "center",
                                             gap: "2px",
@@ -2261,23 +2220,14 @@ const Content = () => {
                                                 ? "Syncing..."
                                                 : syncCooldown
                                                     ? `${cooldownSeconds}s`
-                                                    : "Sync Libraries"] }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleManualSync(true), disabled: syncing || syncCooldown, children: SP_JSX.jsxs("div", { style: {
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: "2px",
-                                            justifyContent: "center",
-                                            color: "#ff9800",
-                                            fontSize: "0.85em",
-                                            padding: "2px"
-                                        }, children: [SP_JSX.jsx(FaSync, { style: {
-                                                    animation: syncing ? "spin 1s linear infinite" : "none",
-                                                    opacity: syncCooldown ? 0.5 : 1,
-                                                    fontSize: "10px"
-                                                } }), syncing
-                                                ? "..."
-                                                : syncCooldown
-                                                    ? `${cooldownSeconds}s`
-                                                    : "Force Sync"] }) }) }), syncing && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: handleCancelSync, children: SP_JSX.jsx("div", { style: { display: "flex", alignItems: "center", gap: "8px", color: "#ff6b6b" }, children: "Cancel Sync" }) }) })), syncProgress && syncProgress.status !== 'idle' && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { fontSize: '12px', width: '100%' }, children: [SP_JSX.jsx("div", { style: { marginBottom: '5px', opacity: 0.9 }, children: syncProgress.current_game }), SP_JSX.jsx("div", { style: {
+                                                    : "Sync Libraries"] }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs(DFL.ButtonItem, { layout: "below", onClick: () => handleManualSync(true), disabled: syncing || syncCooldown, children: [SP_JSX.jsx(FaSync, { style: {
+                                                animation: syncing ? "spin 1s linear infinite" : "none",
+                                                opacity: syncCooldown ? 0.5 : 1,
+                                            } }), " ", syncing
+                                            ? "..."
+                                            : syncCooldown
+                                                ? `${cooldownSeconds}s`
+                                                : "Force Sync"] }) }), syncing && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: handleCancelSync, children: "Cancel Sync" }) })), syncProgress && syncProgress.status !== 'idle' && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { fontSize: '12px', width: '100%' }, children: [SP_JSX.jsx("div", { style: { marginBottom: '5px', opacity: 0.9 }, children: syncProgress.current_game }), SP_JSX.jsx("div", { style: {
                                                 width: '100%',
                                                 height: '4px',
                                                 backgroundColor: '#333',
@@ -2295,15 +2245,10 @@ const Content = () => {
                                             // Artwork phase: show artwork progress
                                             SP_JSX.jsxs(SP_JSX.Fragment, { children: [syncProgress.artwork_synced, " / ", syncProgress.artwork_total, " artwork downloaded"] })) : (
                                             // Sync phase: show game progress
-                                            SP_JSX.jsxs(SP_JSX.Fragment, { children: [syncProgress.synced_games, " / ", syncProgress.total_games, " games synced"] })) }), syncProgress.error && (SP_JSX.jsxs("div", { style: { color: '#ff6b6b', marginTop: '5px' }, children: ["Error: ", syncProgress.error] }))] }) })), (storeStatus.epic.includes("Error") || storeStatus.gog.includes("Error")) && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: checkStoreStatus, children: "Retry Status Check" }) }))] }), SP_JSX.jsx(DFL.PanelSection, { title: "Cleanup", children: !showDeleteConfirm ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: handleDeleteAll, disabled: syncing || deleting || syncCooldown, children: SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", gap: "2px", fontSize: "0.85em", padding: "2px" }, children: [SP_JSX.jsx(FaTrash, { style: { fontSize: "10px" } }), "Delete all UNIFIDECK Libraries and Cache"] }) }) })) : (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { color: "#ff6b6b", fontWeight: "bold" }, children: "Are you sure? This will delete ALL Unifideck games, artwork, auth tokens, and cache. This action is irreversible." }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: {
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: "10px",
-                                            margin: "10px 0"
-                                        }, children: SP_JSX.jsx(DFL.ToggleField, { label: "Also delete installed game files? (Destructive)", checked: deleteFiles, onChange: (checked) => setDeleteFiles(checked) }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: handleDeleteAll, disabled: deleting, children: SP_JSX.jsx("div", { style: { color: "#ff6b6b", fontSize: "0.85em", padding: "2px" }, children: deleting ? "Deleting..." : "Yes, Delete Everything" }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => {
+                                            SP_JSX.jsxs(SP_JSX.Fragment, { children: [syncProgress.synced_games, " / ", syncProgress.total_games, " games synced"] })) }), syncProgress.error && (SP_JSX.jsxs("div", { style: { color: '#ff6b6b', marginTop: '5px' }, children: ["Error: ", syncProgress.error] }))] }) })), (storeStatus.epic.includes("Error") || storeStatus.gog.includes("Error")) && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: checkStoreStatus, children: "Retry Status Check" }) }))] }), SP_JSX.jsx(DFL.PanelSection, { title: "Cleanup", children: !showDeleteConfirm ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: handleDeleteAll, disabled: syncing || deleting || syncCooldown, children: SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", gap: "2px", fontSize: "0.85em", padding: "2px" }, children: [SP_JSX.jsx(FaTrash, { style: { fontSize: "10px" } }), "Delete all UNIFIDECK Libraries and Cache"] }) }) })) : (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "\u26A0\uFE0F Warning", description: "This will delete ALL Unifideck games, artwork, auth tokens, and cache. This action is irreversible." }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Also delete installed game files? (Destructive)", checked: deleteFiles, onChange: (checked) => setDeleteFiles(checked) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: handleDeleteAll, disabled: deleting, children: deleting ? "Deleting..." : "Yes, Delete Everything" }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => {
                                             setShowDeleteConfirm(false);
                                             setDeleteFiles(false);
-                                        }, disabled: deleting, children: SP_JSX.jsx("div", { style: { fontSize: "0.85em", padding: "2px" }, children: "Cancel" }) }) })] })) }), authDialog.show && (SP_JSX.jsx("div", { style: {
+                                        }, disabled: deleting, children: "Cancel" }) })] })) }), authDialog.show && (SP_JSX.jsx("div", { style: {
                             position: 'fixed',
                             top: 0,
                             left: 0,

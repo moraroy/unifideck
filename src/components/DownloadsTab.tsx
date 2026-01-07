@@ -8,15 +8,13 @@
  * - Cancel functionality
  */
 
-import React, { VFC, useState, useEffect, useRef } from "react";
+import { FC, useState, useEffect, useRef } from "react";
 import { call, toaster } from "@decky/api";
 import {
     PanelSection,
     PanelSectionRow,
-    ButtonItem,
     Field,
     ProgressBarWithInfo,
-    Focusable,
     DialogButton,
 } from "@decky/ui";
 import { FaTimes, FaDownload, FaCheck, FaExclamationTriangle } from "react-icons/fa";
@@ -24,8 +22,6 @@ import { FaTimes, FaDownload, FaCheck, FaExclamationTriangle } from "react-icons
 import type {
     DownloadItem,
     DownloadQueueInfo,
-    StorageLocationInfo,
-    StorageLocationsResponse,
 } from "../types/downloads";
 
 /**
@@ -56,7 +52,7 @@ function formatETA(seconds: number): string {
 /**
  * Store icon based on store type
  */
-const StoreIcon: VFC<{ store: string }> = ({ store }) => {
+const StoreIcon: FC<{ store: string }> = ({ store }) => {
     const color = store === "epic" ? "#0078f2" : store === "amazon" ? "#FF9900" : "#a855f7";
     return (
         <span
@@ -75,7 +71,7 @@ const StoreIcon: VFC<{ store: string }> = ({ store }) => {
 /**
  * Single download item display
  */
-const DownloadItemRow: VFC<{
+const DownloadItemRow: FC<{
     item: DownloadItem;
     isCurrent: boolean;
     onCancel: (id: string) => void;
@@ -158,29 +154,14 @@ const DownloadItemRow: VFC<{
                     ) : (
                         <>
                             {/* Progress bar */}
-                            <div
-                                style={{
-                                    width: "100%",
-                                    height: "6px",
-                                    backgroundColor: "#333",
-                                    borderRadius: "3px",
-                                    overflow: "hidden",
-                                    marginBottom: "8px",
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        width: `${item.progress_percent}%`,
-                                        height: "100%",
-                                        backgroundColor: "#1a9fff",
-                                        transition: "width 0.3s ease",
-                                    }}
-                                />
-                            </div>
+                            <ProgressBarWithInfo
+                                nProgress={item.progress_percent / 100}
+                                sOperationText={`${item.progress_percent.toFixed(1)}%`}
+                                bottomSeparator="none"
+                            />
 
                             {/* Stats row */}
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "#888" }}>
-                                <span>{item.progress_percent.toFixed(1)}%</span>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "#888", marginTop: "4px" }}>
                                 <span>
                                     {formatBytes(item.downloaded_bytes)} / {formatBytes(item.total_bytes)}
                                 </span>
@@ -211,7 +192,7 @@ const DownloadItemRow: VFC<{
 /**
  * Empty state display
  */
-const EmptyState: VFC<{ message: string }> = ({ message }) => (
+const EmptyState: FC<{ message: string }> = ({ message }) => (
     <div
         style={{
             textAlign: "center",
@@ -227,7 +208,7 @@ const EmptyState: VFC<{ message: string }> = ({ message }) => (
 /**
  * Main Downloads Tab Component
  */
-export const DownloadsTab: VFC = () => {
+export const DownloadsTab: FC = () => {
     const [queueInfo, setQueueInfo] = useState<DownloadQueueInfo | null>(null);
     const [loading, setLoading] = useState(true);
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
