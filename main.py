@@ -30,6 +30,9 @@ except ImportError:
 # Import Download Manager
 from download_manager import get_download_queue, DownloadQueue
 
+# Import Cloud Save Manager
+from cloud_save_manager import CloudSaveManager
+
 # Use Decky's logger for proper integration
 logger = decky.logger
 
@@ -779,6 +782,71 @@ class ShortcutsManager:
             logger.debug(f"[GameMap] Error checking games.map: {e}")
         return False
 
+    def reconcile_games_map(self) -> Dict[str, Any]:
+        """
+        Reconcile games.map by removing entries pointing to non-existent files.
+        
+        Called on plugin startup to handle games deleted externally (e.g., via file manager).
+        Entries are removed if neither the executable nor work directory exists.
+        
+        Returns:
+            dict: {'removed': int, 'kept': int, 'entries_removed': list}
+        """
+        map_file = os.path.expanduser("~/.local/share/unifideck/games.map")
+        
+        if not os.path.exists(map_file):
+            logger.debug("[Reconcile] games.map not found, nothing to reconcile")
+            return {'removed': 0, 'kept': 0, 'entries_removed': []}
+        
+        removed = 0
+        kept = 0
+        entries_removed = []
+        valid_lines = []
+        
+        try:
+            with open(map_file, 'r') as f:
+                lines = f.readlines()
+            
+            for line in lines:
+                line_stripped = line.strip()
+                if not line_stripped:
+                    continue
+                    
+                parts = line_stripped.split('|')
+                if len(parts) < 3:
+                    logger.warning(f"[Reconcile] Skipping malformed line: {line_stripped}")
+                    continue
+                
+                key = parts[0]  # store:game_id
+                exe_path = parts[1]
+                work_dir = parts[2]
+                
+                # Check if executable exists (primary check)
+                # If exe_path is empty, check work_dir instead
+                path_to_check = exe_path if exe_path else work_dir
+                
+                if path_to_check and os.path.exists(path_to_check):
+                    valid_lines.append(line)
+                    kept += 1
+                else:
+                    removed += 1
+                    entries_removed.append(key)
+                    logger.info(f"[Reconcile] Removing orphaned entry: {key} (path missing: {path_to_check})")
+            
+            # Rewrite games.map with only valid entries
+            if removed > 0:
+                with open(map_file, 'w') as f:
+                    f.writelines(valid_lines)
+                logger.info(f"[Reconcile] Cleaned games.map: {kept} kept, {removed} removed")
+            else:
+                logger.debug(f"[Reconcile] No orphaned entries found: {kept} entries all valid")
+        
+        except Exception as e:
+            logger.error(f"[Reconcile] Error reconciling games.map: {e}")
+            return {'removed': 0, 'kept': kept, 'entries_removed': [], 'error': str(e)}
+        
+        return {'removed': removed, 'kept': kept, 'entries_removed': entries_removed}
+
     async def _set_proton_compatibility(self, app_id: int, compat_tool: str = "proton_experimental"):
         """Set Proton compatibility tool for a non-Steam game in config.vdf"""
         try:
@@ -1039,7 +1107,7 @@ class ShortcutsManager:
             logger.error(f"Error adding game to shortcuts: {e}")
             return False
 
-    async def add_games_batch(self, games: List[Game], launcher_script: str) -> Dict[str, Any]:
+    async def add_games_batch(self, games: List[Game], launcher_script: str, valid_stores: List[str] = None) -> Dict[str, Any]:
         """
         Add multiple games in a single write operation with smart update logic.
 
@@ -1065,7 +1133,12 @@ class ShortcutsManager:
                 launch = shortcut.get('LaunchOptions', '')
 
                 # Only touch Unifideck shortcuts (epic: or gog:)
-                if launch.startswith('epic:') or launch.startswith('gog:'):
+                if launch.startswith('epic:') or launch.startswith('gog:') or launch.startswith('amazon:'):
+                    # Check if we should manage this store
+                    store_prefix = launch.split(':', 1)[0]
+                    if valid_stores is not None and store_prefix not in valid_stores:
+                        continue
+
                     # If this game no longer exists in current library, it's orphaned
                     if launch not in current_launch_options:
                         logger.debug(f"Removing orphaned shortcut: {shortcut.get('AppName')} ({launch})")
@@ -1185,7 +1258,7 @@ class ShortcutsManager:
             traceback.print_exc()
             return {'added': 0, 'skipped': 0, 'removed': 0, 'reclaimed': 0, 'error': str(e)}
 
-    async def force_update_games_batch(self, games: List[Game], launcher_script: str) -> Dict[str, Any]:
+    async def force_update_games_batch(self, games: List[Game], launcher_script: str, valid_stores: List[str] = None) -> Dict[str, Any]:
         """
         Force update all games - rewrites existing shortcuts with fresh data.
         
@@ -1219,7 +1292,12 @@ class ShortcutsManager:
                 exe_path_current = shortcut.get('Exe', '').strip('"')
 
                 # Only touch Unifideck shortcuts (epic: or gog:)
-                if launch.startswith('epic:') or launch.startswith('gog:'):
+                if launch.startswith('epic:') or launch.startswith('gog:') or launch.startswith('amazon:'):
+                    # Check if we should manage this store
+                    store_prefix = launch.split(':', 1)[0]
+                    if valid_stores is not None and store_prefix not in valid_stores:
+                        continue
+
                     if launch not in current_launch_options:
                         # Orphaned - game no longer in library
                         logger.debug(f"Removing orphaned shortcut: {shortcut.get('AppName')} ({launch})")
@@ -1729,7 +1807,7 @@ class EpicConnector:
 
         except Exception as e:
             logger.error(f"Error fetching Epic library: {e}")
-            return []
+            return None
 
     async def get_installed(self) -> Dict[str, Any]:
         """
@@ -2185,13 +2263,13 @@ class AmazonConnector:
 
         except Exception as e:
             logger.error(f"[Amazon] Error syncing library: {e}")
-            return False
+            return None
 
     async def get_library(self) -> List[Game]:
         """Get Amazon Games library via nile"""
         if not self.nile_bin:
             logger.warning("[Amazon] Nile CLI not found")
-            return []
+            return None
 
         try:
             # First sync library to get latest
@@ -2810,7 +2888,7 @@ class GOGAPIClient:
 
         except Exception as e:
             logger.error(f"Error fetching GOG library: {e}")
-            return []
+            return None
 
     async def get_installed(self) -> List[str]:
         """
@@ -3953,6 +4031,10 @@ class GOGAPIClient:
             return None
 
 
+
+# CloudSaveManager imported from cloud_save_manager.py
+
+
 class InstallHandler:
     """Handles game installations across stores"""
 
@@ -4223,6 +4305,12 @@ class Plugin:
 
         logger.info("[INIT] Initializing ShortcutsManager")
         self.shortcuts_manager = ShortcutsManager()
+        
+        # Reconcile games.map to remove orphaned entries (games deleted externally)
+        logger.info("[INIT] Reconciling games.map for orphaned entries")
+        reconcile_result = self.shortcuts_manager.reconcile_games_map()
+        if reconcile_result.get('removed', 0) > 0:
+            logger.info(f"[INIT] Reconciliation complete: {reconcile_result['removed']} orphaned entries removed")
 
         logger.info("[INIT] Initializing EpicConnector")
         self.epic = EpicConnector(plugin_dir=DECKY_PLUGIN_DIR, plugin_instance=self)
@@ -4235,6 +4323,9 @@ class Plugin:
 
         logger.info("[INIT] Initializing InstallHandler")
         self.install_handler = InstallHandler(self.shortcuts_manager, plugin_dir=DECKY_PLUGIN_DIR)
+
+        logger.info("[INIT] Initializing CloudSaveManager")
+        self.cloud_save_manager = CloudSaveManager(plugin_dir=DECKY_PLUGIN_DIR)
 
         # NOTE: Background sync disabled due to method binding issues
         # Users can manually trigger sync via the UI
@@ -4285,6 +4376,18 @@ class Plugin:
                     if exe_path:
                         install_path = self.download_queue.get_install_path(item.storage_location)
                         game_install_path = os.path.join(install_path, item.game_id)
+                        
+                        # Write marker file to identify completed installs (matches GOG behavior)
+                        # This helps protect against accidental deletion on cancel
+                        try:
+                            marker_path = os.path.join(game_install_path, '.unifideck-id')
+                            if os.path.exists(game_install_path):
+                                with open(marker_path, 'w') as f:
+                                    f.write(item.game_id)
+                                logger.info(f"[DownloadComplete] Wrote .unifideck-id marker for Epic game {item.game_id}")
+                        except Exception as e:
+                            logger.warning(f"[DownloadComplete] Failed to write marker file: {e}")
+                        
                         await self.shortcuts_manager.mark_installed(
                             item.game_id, item.store, game_install_path, exe_path
                         )
@@ -4398,12 +4501,15 @@ class Plugin:
         """Fetch artwork for a single game with concurrency control"""
         async with semaphore:
             try:
+                # Update status to show we're working on this game (before download)
+                self.sync_progress.current_game = f"Downloading artwork for {game.title}..."
+                
                 # Pass store and store_id for official CDN artwork sources
                 result = await self.steamgriddb.fetch_game_art(
                     game.title, 
                     game.app_id,
-                    store=game.store,      # 'epic' or 'gog'
-                    store_id=game.id       # Store-specific game ID (e.g. GOG product ID, Epic app_name)
+                    store=game.store,      # 'epic', 'gog', or 'amazon'
+                    store_id=game.id       # Store-specific game ID (e.g. GOG product ID, Epic app_name, Amazon game ID)
                 )
                 
                 # Store steam_app_id from search (for ProtonDB lookups)
@@ -4416,7 +4522,7 @@ class Plugin:
                 # Build detailed source log
                 sources = result.get('sources', [])
                 art_count = result.get('artwork_count', 0)
-                sgdb = '+SGDB' if result.get('sgdb_queued') else ''
+                sgdb = '+SGDB' if result.get('sgdb_filled') else ''
                 source_str = ' '.join(sources) if sources else 'NO_SOURCE'
                 
                 # Log format: [progress] STORE: Title [sources] (artwork_count)
@@ -4460,6 +4566,28 @@ class Plugin:
                 gog_games = await self.gog.get_library()
                 amazon_games = await self.amazon.get_library()
 
+                # Robustly handle API failures (None returns)
+                valid_stores = []
+                all_games = []
+
+                if epic_games is not None:
+                    valid_stores.append('epic')
+                    all_games.extend(epic_games)
+                else:
+                    epic_games = [] # For iteration below
+
+                if gog_games is not None:
+                     valid_stores.append('gog')
+                     all_games.extend(gog_games)
+                else:
+                     gog_games = []
+
+                if amazon_games is not None:
+                     valid_stores.append('amazon')
+                     all_games.extend(amazon_games)
+                else:
+                     amazon_games = []
+
                 # Check for cancellation
                 if self._cancel_sync:
                     logger.warning("Sync cancelled by user after fetching libraries")
@@ -4473,10 +4601,9 @@ class Plugin:
                         'gog_count': 0,
                         'amazon_count': 0,
                         'added_count': 0,
+                        'updated_count': 0,
                         'artwork_count': 0
                     }
-
-                all_games = epic_games + gog_games + amazon_games
                 self.sync_progress.total_games = len(all_games)
                 self.sync_progress.synced_games = 0
 
@@ -4640,12 +4767,13 @@ class Plugin:
                              return {'success': False, 'cancelled': True}
 
                         # Download in parallel - 30 concurrent (10 per source × 3 sources)
+                        logger.info(f"  → Starting parallel download (concurrency: 30, sources: Epic/GOG/Amazon CDN + Steam + SGDB fallback)")
                         semaphore = asyncio.Semaphore(30)
                         tasks = [self.fetch_artwork_with_progress(game, semaphore) for game in games_needing_art]
                         results = await asyncio.gather(*tasks, return_exceptions=True)
                         artwork_count = sum(1 for r in results if r is True)
                         
-                        logger.info(f"Downloaded artwork for {artwork_count} games")
+                        logger.info(f"Artwork download complete: {artwork_count}/{len(games_needing_art)} games successful")
 
                 # --- STEP 2: UPDATE GAME ICONS ---
                 # Check for local icons and update game objects
@@ -4665,7 +4793,8 @@ class Plugin:
                 self.sync_progress.status = "syncing"
                 self.sync_progress.current_game = "Saving shortcuts..."
                 
-                batch_result = await self.shortcuts_manager.add_games_batch(all_games, launcher_script)
+                # Use valid_stores to prevent deleting shortcuts for stores that failed to sync
+                batch_result = await self.shortcuts_manager.add_games_batch(all_games, launcher_script, valid_stores=valid_stores)
                 added_count = batch_result.get('added', 0)
                 
                 if batch_result.get('error'):
@@ -4740,24 +4869,27 @@ class Plugin:
                 gog_games = await self.gog.get_library()
                 amazon_games = await self.amazon.get_library()
 
-                # Check for cancellation
-                if self._cancel_sync:
-                    logger.warning("Force sync cancelled by user after fetching libraries")
-                    self.sync_progress.status = "cancelled"
-                    self.sync_progress.current_game = "Force sync cancelled by user"
-                    return {
-                        'success': False,
-                        'error': 'Sync cancelled by user',
-                        'cancelled': True,
-                        'epic_count': 0,
-                        'gog_count': 0,
-                        'amazon_count': 0,
-                        'added_count': 0,
-                        'updated_count': 0,
-                        'artwork_count': 0
-                    }
+                # Robustly handle API failures (None returns)
+                valid_stores = []
+                all_games = []
 
-                all_games = epic_games + gog_games + amazon_games
+                if epic_games is not None:
+                    valid_stores.append('epic')
+                    all_games.extend(epic_games)
+                else:
+                    epic_games = []
+
+                if gog_games is not None:
+                    valid_stores.append('gog')
+                    all_games.extend(gog_games)
+                else:
+                    gog_games = []
+
+                if amazon_games is not None:
+                    valid_stores.append('amazon')
+                    all_games.extend(amazon_games)
+                else:
+                    amazon_games = []
                 self.sync_progress.total_games = len(all_games)
                 self.sync_progress.synced_games = 0
 
@@ -4813,7 +4945,7 @@ class Plugin:
                 self.sync_progress.current_game = "Force sync: Rewriting shortcuts..."
 
                 # Force update all games - rewrite existing shortcuts
-                batch_result = await self.shortcuts_manager.force_update_games_batch(all_games, launcher_script)
+                batch_result = await self.shortcuts_manager.force_update_games_batch(all_games, launcher_script, valid_stores=valid_stores)
                 added_count = batch_result.get('added', 0)
                 updated_count = batch_result.get('updated', 0)
 
@@ -4934,12 +5066,13 @@ class Plugin:
                              return {'success': False, 'cancelled': True}
 
                         # Download in parallel - 30 concurrent
+                        logger.info(f"  → Starting parallel download (concurrency: 30, sources: Epic/GOG/Amazon CDN + Steam + SGDB fallback)")
                         semaphore = asyncio.Semaphore(30)
                         tasks = [self.fetch_artwork_with_progress(game, semaphore) for game in games_needing_art]
                         results = await asyncio.gather(*tasks, return_exceptions=True)
                         artwork_count = sum(1 for r in results if r is True)
                         
-                        logger.info(f"Downloaded artwork for {artwork_count} games")
+                        logger.info(f"Artwork download complete: {artwork_count}/{len(games_needing_art)} games successful")
 
                 # --- STEP 2: UPDATE GAME ICONS ---
                 # Check for local icons and update game objects
@@ -4966,25 +5099,26 @@ class Plugin:
                 if force_result.get('error'):
                     raise Exception(force_result['error'])
 
-                # Update Proton compatibility for all installed Windows games
+                # CLEAR Proton compatibility for all Unifideck games
+                # The unifideck-launcher script handles Proton internally via umu-run
+                # We DON'T want Steam to wrap our launcher in Proton (causes Python path issues)
                 self.sync_progress.status = "proton_setup"
-                self.sync_progress.current_game = "Force sync: Updating Proton compatibility..."
-                proton_updated = 0
+                self.sync_progress.current_game = "Force sync: Clearing Proton compatibility (launcher manages internally)..."
+                proton_cleared = 0
                 
                 shortcuts_data = await self.shortcuts_manager.read_shortcuts()
                 for idx, shortcut in shortcuts_data.get('shortcuts', {}).items():
                     launch_opts = shortcut.get('LaunchOptions', '')
-                    exe_path = shortcut.get('Exe', '').strip('"')
                     app_id = shortcut.get('appid')
                     
-                    # Check if this is a Unifideck game with a Windows executable
-                    if (launch_opts.startswith('epic:') or launch_opts.startswith('gog:')) or \
-                       (not launch_opts and exe_path.lower().endswith('.exe')):
-                        if exe_path.lower().endswith('.exe') and app_id:
-                            await self.shortcuts_manager._set_proton_compatibility(app_id, "proton_experimental")
-                            proton_updated += 1
+                    # Check if this is a Unifideck game (has store:game_id format in LaunchOptions)
+                    if ':' in launch_opts and app_id:
+                        store_prefix = launch_opts.split(':')[0]
+                        if store_prefix in ('epic', 'gog', 'amazon'):
+                            await self.shortcuts_manager._clear_proton_compatibility(app_id)
+                            proton_cleared += 1
                 
-                logger.info(f"Updated Proton compatibility for {proton_updated} games")
+                logger.info(f"Cleared Proton compatibility for {proton_cleared} games (launcher manages Proton via umu-run)")
 
                 # Complete
                 self.sync_progress.status = "complete"
@@ -5117,6 +5251,175 @@ class Plugin:
             logger.error(f"Error installing game: {e}")
             return {'success': False, 'error': str(e)}
 
+
+    async def sync_cloud_saves(self, store: str, game_id: str, direction: str = "download", 
+                               game_name: str = "", save_path: str = "") -> Dict[str, Any]:
+        """
+        Sync cloud saves for a game.
+        
+        Args:
+            store: "epic" or "gog"
+            game_id: Game ID (Epic app_name or GOG client_id)
+            direction: "download" (pull from cloud) or "upload" (push to cloud)
+            game_name: Optional game title for logging
+            save_path: For GOG games, the local save path (required)
+        
+        Returns:
+            {success, message, duration, error?}
+        """
+        logger.info(f"[API] sync_cloud_saves called: store={store}, game_id={game_id}, direction={direction}")
+        
+        try:
+            if store == "epic":
+                return await self.cloud_save_manager.sync_epic(game_id, direction=direction, game_name=game_name)
+            elif store == "gog":
+                return await self.cloud_save_manager.sync_gog(game_id, save_path=save_path, 
+                                                              direction=direction, game_name=game_name)
+            else:
+                error = f"Unknown store: {store}"
+                logger.error(f"[API] {error}")
+                return {"success": False, "error": error}
+        except Exception as e:
+            logger.error(f"[API] sync_cloud_saves error: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+    
+    async def get_cloud_save_status(self, store: str, game_id: str) -> Dict[str, Any]:
+        """
+        Get the last cloud save sync status for a game.
+        
+        Args:
+            store: "epic" or "gog"
+            game_id: Game ID
+        
+        Returns:
+            {last_sync, status, direction, error?} or None if never synced
+        """
+        logger.info(f"[API] get_cloud_save_status called: store={store}, game_id={game_id}")
+        
+        status = self.cloud_save_manager.get_sync_status(store, game_id)
+        if status:
+            return {"success": True, "status": status}
+        return {"success": True, "status": None}
+    
+    async def check_cloud_save_conflict(self, store: str, game_id: str, 
+                                        save_path: str = "") -> Dict[str, Any]:
+        """
+        Check if a game has cloud save conflicts.
+        
+        Args:
+            store: "epic" or "gog"
+            game_id: Game ID
+            save_path: Local save path (for file timestamp comparison)
+        
+        Returns:
+            {has_conflict, is_fresh, local_timestamp, cloud_timestamp, local_newer}
+        """
+        logger.info(f"[API] check_cloud_save_conflict: {store}/{game_id}")
+        
+        try:
+            conflict = await self.cloud_save_manager.check_for_conflicts(store, game_id, save_path)
+            return {"success": True, "conflict": conflict}
+        except Exception as e:
+            logger.error(f"[API] check_cloud_save_conflict error: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+    
+    async def resolve_cloud_save_conflict(self, store: str, game_id: str, 
+                                          use_cloud: bool) -> Dict[str, Any]:
+        """
+        Resolve a cloud save conflict.
+        
+        Args:
+            store: "epic" or "gog"
+            game_id: Game ID
+            use_cloud: True to use cloud saves, False to upload local saves
+        
+        Returns:
+            {action: "download" or "upload"}
+        """
+        logger.info(f"[API] resolve_cloud_save_conflict: {store}/{game_id}, use_cloud={use_cloud}")
+        
+        try:
+            result = self.cloud_save_manager.resolve_conflict(store, game_id, use_cloud)
+            return {"success": True, **result}
+        except Exception as e:
+            logger.error(f"[API] resolve_cloud_save_conflict error: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+    
+    async def start_game_monitor(self, pid: int, store: str, game_id: str,
+                                  game_name: str = "", save_path: str = "") -> Dict[str, Any]:
+        """
+        Start monitoring a game process for cloud save sync on exit.
+        
+        Args:
+            pid: Process ID of the running game
+            store: "epic" or "gog"
+            game_id: Game ID
+            game_name: Game title for logging
+            save_path: Local save path (for GOG)
+        
+        Returns:
+            {success, message}
+        """
+        logger.info(f"[API] start_game_monitor: PID={pid}, {store}/{game_id}")
+        
+        try:
+            success = await self.cloud_save_manager.process_monitor.start_monitoring(
+                pid, store, game_id, game_name, save_path
+            )
+            return {
+                "success": success,
+                "message": f"Monitoring PID {pid}" if success else f"Process {pid} not found"
+            }
+        except Exception as e:
+            logger.error(f"[API] start_game_monitor error: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+    
+    async def get_pending_conflicts(self) -> Dict[str, Any]:
+        """
+        Get all pending cloud save conflicts that need resolution.
+        
+        Returns:
+            {conflicts: {store:game_id: conflict_info}}
+        """
+        logger.info("[API] get_pending_conflicts called")
+        
+        try:
+            conflicts = self.cloud_save_manager.get_pending_conflicts()
+            return {"success": True, "conflicts": conflicts}
+        except Exception as e:
+            logger.error(f"[API] get_pending_conflicts error: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+
+    async def check_game_installation_status(self, store: str, game_id: str) -> bool:
+        """
+        **SINGLE SOURCE OF TRUTH** for checking if a game is installed.
+        
+        Uses priority-based lookup:
+        Priority 1: games.map (fast, authoritative for Unifideck-installed games)
+        Priority 2: Store-specific check (for games installed outside Unifideck)
+        
+        Args:
+            store: 'epic' or 'gog'
+            game_id: Store-specific game identifier
+            
+        Returns:
+            True if game is installed, False otherwise
+        """
+        # Priority 1: Check games.map (authoritative for all Unifideck installs)
+        # This works for any install location (internal, SD card, etc.)
+        is_installed = self.shortcuts_manager._is_in_game_map(store, game_id)
+        
+        # Priority 2: Fall back to store-specific check (for games installed outside Unifideck)
+        if not is_installed:
+            if store == 'epic':
+                installed_games = await self.epic.get_installed()
+                is_installed = game_id in installed_games
+            elif store == 'gog':
+                installed_ids = await self.gog.get_installed()
+                is_installed = game_id in installed_ids
+        
+        return is_installed
+
     async def get_game_info(self, app_id: int) -> Dict[str, Any]:
         """Get game info including installation status and size
 
@@ -5160,7 +5463,7 @@ class Plugin:
                     # Priority 1: Check games.map (fast, authoritative for Unifideck-installed games)
                     # This works for any install location (internal, SD card, etc.)
                     is_installed = self.shortcuts_manager._is_in_game_map(store, game_id)
-                    
+
                     # Priority 2: Fall back to store-specific check (for games installed outside Unifideck)
                     if not is_installed:
                         if store == 'epic':
@@ -5399,15 +5702,23 @@ class Plugin:
             logger.error(f"[DownloadQueue] Error getting queue info: {e}")
             return {'success': False, 'error': str(e)}
 
-    async def add_to_download_queue(self, game_id: str, game_title: str, store: str) -> Dict[str, Any]:
-        """Add a game to the download queue"""
+    async def add_to_download_queue(self, game_id: str, game_title: str, store: str, was_previously_installed: bool = False) -> Dict[str, Any]:
+        """Add a game to the download queue
+        
+        Args:
+            game_id: Store-specific game identifier
+            game_title: Display name
+            store: 'epic' or 'gog'
+            was_previously_installed: GUARDRAIL - If True, cancel won't delete game files
+        """
         try:
             result = await self.download_queue.add_to_queue(
                 game_id=game_id,
                 game_title=game_title,
-                store=store
+                store=store,
+                was_previously_installed=was_previously_installed
             )
-            logger.info(f"[DownloadQueue] Added {game_title} to queue: {result}")
+            logger.info(f"[DownloadQueue] Added {game_title} to queue (was_installed={was_previously_installed}): {result}")
             return result
         except Exception as e:
             logger.error(f"[DownloadQueue] Error adding to queue: {e}")
@@ -5421,6 +5732,12 @@ class Plugin:
             
             if 'error' in game_info:
                 return {'success': False, 'error': game_info['error']}
+            
+            # GUARDRAIL: Check if game is already installed
+            # If so, we'll tell the download queue to NEVER delete files on cancel
+            was_previously_installed = game_info.get('is_installed', False)
+            if was_previously_installed:
+                logger.info(f"[DownloadQueue] GUARDRAIL: {game_info['title']} is already installed - will protect on cancel")
             
             # Check for multi-part GOG downloads
             is_multipart = False
@@ -5443,7 +5760,8 @@ class Plugin:
             result = await self.add_to_download_queue(
                 game_id=game_info['game_id'],
                 game_title=game_info['title'],
-                store=game_info['store']
+                store=game_info['store'],
+                was_previously_installed=was_previously_installed  # GUARDRAIL
             )
             
             # Add multi-part flag to response
@@ -5716,6 +6034,8 @@ class Plugin:
         """
         Get all Unifideck games with installation status for frontend tab filtering
         
+        Uses centralized check_game_installation_status() for consistency.
+        
         Returns:
             List of dicts: [{'appId': int, 'store': str, 'isInstalled': bool, 'title': str, 'steamAppId': int|None}]
         """
@@ -5724,7 +6044,7 @@ class Plugin:
             epic_installed = set(await self.epic.get_installed())
             gog_installed = set(await self.gog.get_installed())
             amazon_installed = set(await self.amazon.get_installed())
-            
+
             # Load steam_app_id cache for ProtonDB lookups
             steam_appid_cache = load_steam_appid_cache()
             
@@ -5741,7 +6061,7 @@ class Plugin:
                 parts = launch_options.split(':', 1)
                 store = parts[0]
                 game_id = parts[1] if len(parts) > 1 else ''
-                
+
                 # Check installation status
                 is_installed = False
                 if store == 'epic':
@@ -5948,14 +6268,19 @@ class Plugin:
                     logger.error(f"[Cleanup] Error deleting auth tokens: {e}")
 
                 # 4. DELETE CACHES & INTERNAL DATA
+                # games.map should only be deleted when delete_files=True
+                # It maps installed games to their executables
                 files_to_delete = [
                     "~/.local/share/unifideck/game_sizes.json",
                     "~/.local/share/unifideck/shortcuts_registry.json",
-                    "~/.local/share/unifideck/games.map",
                     "~/.local/share/unifideck/download_queue.json",
                     "~/.local/share/unifideck/download_settings.json",
                     os.path.join(get_steam_appid_cache_path()) # Steam AppID Cache
                 ]
+                
+                # Only delete games.map if we're also deleting game files (destructive mode)
+                if delete_files:
+                    files_to_delete.append("~/.local/share/unifideck/games.map")
 
                 for file_path in files_to_delete:
                     try:

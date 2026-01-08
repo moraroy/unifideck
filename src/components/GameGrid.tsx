@@ -1,6 +1,5 @@
-import { FC } from "react";
+import React, { FC } from "react";
 import { UnifideckGame } from "../types/steam";
-import { Field, Focusable, DialogButton, PanelSection, PanelSectionRow } from "@decky/ui";
 
 interface GameGridProps {
   games: UnifideckGame[];
@@ -15,24 +14,40 @@ interface GameGridProps {
 export const GameGrid: FC<GameGridProps> = ({ games, loading }) => {
   if (loading) {
     return (
-      <PanelSection>
-        <PanelSectionRow>
-          <Field description="Loading games..." />
-        </PanelSectionRow>
-      </PanelSection>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "400px",
+          fontSize: "16px",
+          opacity: 0.7,
+        }}
+      >
+        Loading games...
+      </div>
     );
   }
 
   if (games.length === 0) {
     return (
-      <PanelSection>
-        <PanelSectionRow>
-          <Field
-            label="No games found"
-            description="Try syncing your libraries from the Unifideck settings"
-          />
-        </PanelSectionRow>
-      </PanelSection>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "400px",
+          fontSize: "16px",
+          opacity: 0.7,
+          flexDirection: "column",
+          gap: "10px",
+        }}
+      >
+        <div>No games found</div>
+        <div style={{ fontSize: "12px" }}>
+          Try syncing your libraries from the Unifideck settings
+        </div>
+      </div>
     );
   }
 
@@ -95,74 +110,78 @@ const GameCard: FC<{ game: UnifideckGame }> = ({ game }) => {
   };
 
   return (
-    <Focusable style={{ padding: "4px" }}>
-      <DialogButton
-        onClick={handleClick}
+    <div
+      onClick={handleClick}
+      style={{
+        background: "rgba(255, 255, 255, 0.05)",
+        borderRadius: "4px",
+        padding: "15px",
+        cursor: "pointer",
+        transition: "background 0.2s",
+        border: "1px solid rgba(255, 255, 255, 0.1)",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = "rgba(255, 255, 255, 0.1)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "rgba(255, 255, 255, 0.05)";
+      }}
+    >
+      <div style={{ marginBottom: "8px", fontWeight: "bold" }}>
+        {game.title}
+      </div>
+
+      <div
         style={{
-          width: "100%",
-          minHeight: "80px",
           display: "flex",
-          flexDirection: "column",
-          alignItems: "flex-start",
-          padding: "12px",
+          gap: "8px",
+          fontSize: "11px",
+          flexWrap: "wrap",
         }}
       >
-        <div style={{ marginBottom: "8px", fontWeight: "bold" }}>
-          {game.title}
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            gap: "8px",
-            fontSize: "11px",
-            flexWrap: "wrap",
-          }}
-        >
-          {game.store !== "steam" && game.store !== "unknown" && (
-            <span
-              style={{
-                background: getStoreColor(game.store),
-                padding: "2px 6px",
-                borderRadius: "3px",
-              }}
-            >
-              {game.store.toUpperCase()}
-            </span>
-          )}
-
-          {game.isInstalled && (
-            <span
-              style={{
-                background: "rgba(76, 175, 80, 0.3)",
-                padding: "2px 6px",
-                borderRadius: "3px",
-              }}
-            >
-              Installed
-            </span>
-          )}
-
-          {!game.isInstalled && game.isShortcut && (
-            <span
-              style={{
-                background: "rgba(255, 152, 0, 0.3)",
-                padding: "2px 6px",
-                borderRadius: "3px",
-              }}
-            >
-              Not Installed
-            </span>
-          )}
-        </div>
-
-        {(game.playtimeMinutes ?? 0) > 0 && (
-          <div style={{ marginTop: "8px", fontSize: "11px", opacity: 0.7 }}>
-            {Math.floor((game.playtimeMinutes ?? 0) / 60)}h {(game.playtimeMinutes ?? 0) % 60}m played
-          </div>
+        {game.store !== "steam" && game.store !== "unknown" && (
+          <span
+            style={{
+              background: getStoreColor(game.store),
+              padding: "2px 6px",
+              borderRadius: "3px",
+            }}
+          >
+            {game.store.toUpperCase()}
+          </span>
         )}
-      </DialogButton>
-    </Focusable>
+
+        {game.isInstalled && (
+          <span
+            style={{
+              background: "rgba(76, 175, 80, 0.3)",
+              padding: "2px 6px",
+              borderRadius: "3px",
+            }}
+          >
+            Installed
+          </span>
+        )}
+
+        {!game.isInstalled && game.isShortcut && (
+          <span
+            style={{
+              background: "rgba(255, 152, 0, 0.3)",
+              padding: "2px 6px",
+              borderRadius: "3px",
+            }}
+          >
+            Not Installed
+          </span>
+        )}
+      </div>
+
+      {(game.playtimeMinutes ?? 0) > 0 && (
+        <div style={{ marginTop: "8px", fontSize: "11px", opacity: 0.7 }}>
+          {Math.floor((game.playtimeMinutes ?? 0) / 60)}h {(game.playtimeMinutes ?? 0) % 60}m played
+        </div>
+      )}
+    </div>
   );
 };
 

@@ -5,7 +5,7 @@
  * Extracted from Content() for tab-based navigation.
  */
 
-import { FC, useState, useEffect } from "react";
+import React, { FC, useState, useEffect } from "react";
 import { call, toaster } from "@decky/api";
 import {
     PanelSection,
@@ -13,7 +13,9 @@ import {
     Field,
     Dropdown,
     DropdownOption,
+    ButtonItem,
 } from "@decky/ui";
+import { FaSave } from "react-icons/fa";
 
 import type { StorageLocationInfo, StorageLocationsResponse } from "../types/downloads";
 
@@ -86,30 +88,34 @@ export const StorageSettings: FC = () => {
 
     return (
         <PanelSection title="DOWNLOAD SETTINGS">
-            {dropdownOptions.length > 0 ? (
-                <PanelSectionRow>
-                    <Dropdown
-                        label="Install Location"
-                        description="Where new games will be downloaded"
-                        rgOptions={dropdownOptions}
-                        selectedOption={selectedOption?.data}
-                        onChange={handleStorageChange}
-                        disabled={saving}
-                    />
-                </PanelSectionRow>
-            ) : (
-                <PanelSectionRow>
-                    <Field description="Loading storage options..." />
-                </PanelSectionRow>
-            )}
+            <PanelSectionRow>
+                <Field
+                    label="Install Location"
+                    description="Where new games will be downloaded"
+                >
+                    {dropdownOptions.length > 0 ? (
+                        <Dropdown
+                            rgOptions={dropdownOptions}
+                            selectedOption={selectedOption?.data}
+                            onChange={handleStorageChange}
+                            disabled={saving}
+                        />
+                    ) : (
+                        <span style={{ color: "#888", fontSize: "12px" }}>
+                            Loading storage options...
+                        </span>
+                    )}
+                </Field>
+            </PanelSectionRow>
 
             {/* Show current default path */}
             {locations.length > 0 && (
                 <PanelSectionRow>
-                    <Field
-                        label="Path"
-                        description={locations.find((l) => l.id === defaultStorage)?.path || "Unknown"}
-                    />
+                    <Field label="Path">
+                        <span style={{ color: "#888", fontSize: "12px" }}>
+                            {locations.find((l) => l.id === defaultStorage)?.path || "Unknown"}
+                        </span>
+                    </Field>
                 </PanelSectionRow>
             )}
         </PanelSection>

@@ -1,9 +1,7 @@
 import React, { FC, useMemo, useState } from "react";
 import { useSteamLibrary, useUnifideckGames } from "../hooks/useSteamLibrary";
 import { GameGrid } from "../components/GameGrid";
-import { StoreType } from "../types/steam";
-import { Dropdown, DropdownOption, TextField, Field, Focusable, PanelSection, PanelSectionRow } from "@decky/ui";
-import { FaExclamationTriangle } from "react-icons/fa";
+import { UnifideckGame, StoreType } from "../types/steam";
 
 export type LibraryFilter = "all" | "installed" | "great-on-deck";
 
@@ -32,15 +30,16 @@ class ErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       return (
-        <PanelSection>
-          <PanelSectionRow>
-            <Field
-              label="Unifideck Error"
-              description="Failed to load unified library view. Check browser console for details."
-              icon={<FaExclamationTriangle color="#ff6b6b" />}
-            />
-          </PanelSectionRow>
-        </PanelSection>
+        <div style={{ padding: '20px', color: '#ff6b6b' }}>
+          <h3>Unifideck Error</h3>
+          <p>Failed to load unified library view</p>
+          <pre style={{ fontSize: '11px', opacity: 0.7 }}>
+            {this.state.error?.message}
+          </pre>
+          <p style={{ fontSize: '12px', opacity: 0.7, marginTop: '10px' }}>
+            Check browser console for details
+          </p>
+        </div>
       );
     }
 
@@ -128,15 +127,19 @@ const UnifiedLibraryViewInner: FC<UnifiedLibraryViewProps> = ({
 
   if (error) {
     return (
-      <PanelSection>
-        <PanelSectionRow>
-          <Field
-            label="Error loading games"
-            description={`${error}\n\nTry reloading the plugin or checking the console for details`}
-            icon={<FaExclamationTriangle color="#ff6b6b" />}
-          />
-        </PanelSectionRow>
-      </PanelSection>
+      <div
+        style={{
+          padding: "20px",
+          textAlign: "center",
+          color: "#ff6b6b",
+        }}
+      >
+        <div style={{ marginBottom: "10px", fontSize: "16px" }}>Error loading games</div>
+        <div style={{ fontSize: "12px", opacity: 0.7 }}>{error}</div>
+        <div style={{ marginTop: "15px", fontSize: "11px", opacity: 0.5 }}>
+          Try reloading the plugin or checking the console for details
+        </div>
+      </div>
     );
   }
 
@@ -170,26 +173,44 @@ const UnifiedLibraryViewInner: FC<UnifiedLibraryViewProps> = ({
           </div>
 
           {/* Store filter */}
-          <Focusable style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-            <Field label="Store:" bottomSeparator="none">
-              <Dropdown
-                rgOptions={[
-                  { label: "All Stores", data: "all" },
-                  { label: "Steam", data: "steam" },
-                  { label: "Epic Games", data: "epic" },
-                  { label: "GOG", data: "gog" },
-                ]}
-                selectedOption={storeFilter}
-                onChange={(option: DropdownOption) => setStoreFilter(option.data as StoreType | "all")}
-              />
-            </Field>
-          </Focusable>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <span style={{ fontSize: "12px", opacity: 0.7 }}>Store:</span>
+            <select
+              value={storeFilter}
+              onChange={(e) => setStoreFilter(e.target.value as StoreType | "all")}
+              style={{
+                background: "rgba(255, 255, 255, 0.1)",
+                border: "1px solid rgba(255, 255, 255, 0.2)",
+                borderRadius: "4px",
+                padding: "4px 8px",
+                color: "white",
+                fontSize: "12px",
+              }}
+            >
+              <option value="all">All Stores</option>
+              <option value="steam">Steam</option>
+              <option value="epic">Epic Games</option>
+              <option value="gog">GOG</option>
+              <option value="amazon">Amazon Games</option>
+            </select>
+          </div>
 
           {/* Search */}
-          <TextField
-            label="Search games"
+          <input
+            type="text"
+            placeholder="Search games..."
             value={searchQuery}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{
+              background: "rgba(255, 255, 255, 0.1)",
+              border: "1px solid rgba(255, 255, 255, 0.2)",
+              borderRadius: "4px",
+              padding: "6px 12px",
+              color: "white",
+              fontSize: "12px",
+              flex: "1",
+              minWidth: "200px",
+            }}
           />
         </div>
       </div>
