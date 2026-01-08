@@ -1,4 +1,4 @@
-const manifest = {"name":"Unifideck","version":"0.3.0","main":"dist/index.js","author":"numan","flags":["_root"],"api_version":2,"publish":{"tags":["library","games","epic","gog","multi-store"],"description":"Unified game library manager - Browse and install games from Steam, Epic Games, and GOG in one place","image":"https://raw.githubusercontent.com/numanmubarak-PE/unifideck/main/icon.png"}};
+const manifest = {"name":"Unifideck","version":"0.4.0","main":"dist/index.js","author":"numan","flags":["_root"],"api_version":2,"publish":{"tags":["library","games","epic","gog","multi-store"],"description":"Unified game library manager - Browse and install games from Steam, Epic Games, and GOG in one place","image":"https://raw.githubusercontent.com/numanmubarak-PE/unifideck/main/icon.png"}};
 const API_VERSION = 2;
 if (!manifest?.name) {
     throw new Error('[@decky/api]: Failed to find plugin manifest.');
@@ -314,7 +314,7 @@ function meetsGreatOnDeckCriteria(compat) {
  * Unifideck Tab Filters
  *
  * Filters for creating custom library tabs that include
- * Steam, Epic, and GOG games with proper store detection.
+ * Steam, Epic, GOG, and Amazon games with proper store detection.
  */
 // Non-Steam shortcut app_type value
 const NON_STEAM_APP_TYPE = 1073741824;
@@ -411,7 +411,7 @@ const filterFunctions = {
         }
         return app.app_type === NON_STEAM_APP_TYPE;
     },
-    // Filter by store (Steam, Epic, GOG)
+    // Filter by store (Steam, Epic, GOG, Amazon)
     store: (params, app) => {
         if (params.store === 'all')
             return true;
@@ -429,7 +429,7 @@ const filterFunctions = {
         if (app.steam_deck_compat_category === DECK_VERIFIED) {
             return true;
         }
-        // For Unifideck games (Epic/GOG), use title-based compatibility lookup
+        // For Unifideck games (Epic/GOG/Amazon), use title-based compatibility lookup
         const cached = unifideckGameCache.get(app.appid);
         if (cached) {
             // Use app's display_name for title-based search
@@ -486,10 +486,10 @@ function runFilters(filters, app) {
  * Unifideck Tab Container
  *
  * Manages custom tabs for the Steam library that include
- * Epic and GOG games alongside Steam games.
+ * Epic, GOG, and Amazon games alongside Steam games.
  */
 
-// Default Unifideck tabs - ORDERED: Great on Deck, All Games, Installed, Steam, Epic, GOG, Non-Steam
+// Default Unifideck tabs - ORDERED: Great on Deck, All Games, Installed, Steam, Epic, GOG, Amazon, Non-Steam
 const UNIFIDECK_TABS = [
     {
         id: 'unifideck-deck',
@@ -528,9 +528,15 @@ const UNIFIDECK_TABS = [
         filters: [{ type: 'store', params: { store: 'gog' } }]
     },
     {
+        id: 'unifideck-amazon',
+        title: 'Amazon',
+        position: 6,
+        filters: [{ type: 'store', params: { store: 'amazon' } }]
+    },
+    {
         id: 'unifideck-nonsteam',
         title: 'Non-Steam',
-        position: 6,
+        position: 7,
         filters: [{ type: 'nonSteam', params: {} }] // All non-Steam shortcuts except non-installed Unifideck
     }
 ];
@@ -655,6 +661,7 @@ class TabManager {
         this.cacheLoaded = false;
         this.epicGameCount = 0;
         this.gogGameCount = 0;
+        this.amazonGameCount = 0;
     }
     async initialize() {
         if (this.initialized)
@@ -684,8 +691,9 @@ class TabManager {
                 // Count games by store for tab visibility
                 this.epicGameCount = games.filter((g) => g.store === 'epic').length;
                 this.gogGameCount = games.filter((g) => g.store === 'gog').length;
-                console.log(`[Unifideck] Loaded ${games.length} games into cache (Epic: ${this.epicGameCount}, GOG: ${this.gogGameCount})`);
-                // Prefetch compatibility info (ProtonDB + Deck Verified) for Epic/GOG games
+                this.amazonGameCount = games.filter((g) => g.store === 'amazon').length;
+                console.log(`[Unifideck] Loaded ${games.length} games into cache (Epic: ${this.epicGameCount}, GOG: ${this.gogGameCount}, Amazon: ${this.amazonGameCount})`);
+                // Prefetch compatibility info (ProtonDB + Deck Verified) for Epic/GOG/Amazon games
                 const titles = games
                     .filter((g) => g.title)
                     .map((g) => g.title);
@@ -717,6 +725,9 @@ class TabManager {
         if (tabId === 'unifideck-gog' && this.gogGameCount === 0) {
             return false;
         }
+        if (tabId === 'unifideck-amazon' && this.amazonGameCount === 0) {
+            return false;
+        }
         return true;
     }
     isInitialized() {
@@ -740,7 +751,7 @@ const tabManager = new TabManager();
  * Unifideck Library Patch
  *
  * Patches the Steam library to inject custom tabs that include
- * Epic and GOG games alongside Steam games.
+ * Epic, GOG, and Amazon games alongside Steam games.
  *
  * When TabMaster is detected, custom tabs are NOT injected - instead,
  * users can use [Unifideck] collections via TabMaster.
@@ -1095,15 +1106,6 @@ async function syncUnifideckCollections() {
 }
 
 /**
- * Downloads Tab Component
- *
- * Displays the download queue with:
- * - Current download (active, with progress bar)
- * - Queued downloads (waiting)
- * - Recently completed downloads
- * - Cancel functionality
- */
-/**
  * Format bytes to human-readable size
  */
 function formatBytes(bytes) {
@@ -1132,8 +1134,8 @@ function formatETA(seconds) {
  * Store icon based on store type
  */
 const StoreIcon = ({ store }) => {
-    const color = store === "epic" ? "#0078f2" : "#a855f7";
-    return (SP_REACT.createElement("span", { style: {
+    const color = store === "epic" ? "#0078f2" : store === "amazon" ? "#FF9900" : "#a855f7";
+    return (SP_JSX.jsx("span", { style: {
             display: "inline-block",
             width: "8px",
             height: "8px",
@@ -1153,86 +1155,51 @@ const DownloadItemRow = ({ item, isCurrent, onCancel, onClear }) => {
         cancelled: "#f59e0b",
         error: "#ef4444",
     };
-    return (SP_REACT.createElement("div", { style: {
+    return (SP_JSX.jsxs("div", { style: {
             backgroundColor: "#1e2329",
             borderRadius: "8px",
             padding: "12px",
             marginBottom: "8px",
             border: isCurrent ? "1px solid #1a9fff" : "1px solid #333",
-        } },
-        SP_REACT.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" } },
-            SP_REACT.createElement("div", { style: { display: "flex", alignItems: "center", flex: 1 } },
-                SP_REACT.createElement(StoreIcon, { store: item.store }),
-                SP_REACT.createElement("span", { style: { fontWeight: "bold", color: "#fff", fontSize: "14px" } }, item.game_title)),
-            (item.status === "completed" || item.status === "error" || item.status === "cancelled") && onClear && (SP_REACT.createElement(DFL.DialogButton, { onClick: () => onClear(item.id), style: {
-                    padding: "0",
-                    width: "20px",
-                    height: "20px",
-                    minWidth: "auto",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: "transparent",
-                    color: "#666",
-                } },
-                SP_REACT.createElement(FaTimes, { size: 10 })))),
-        (item.status === "downloading" || item.status === "queued") && (SP_REACT.createElement("div", { style: { marginBottom: "8px" } },
-            SP_REACT.createElement(DFL.DialogButton, { onClick: () => onCancel(item.id), style: {
-                    padding: "4px 12px",
-                    minWidth: "auto",
-                    backgroundColor: "rgba(239, 68, 68, 0.2)",
-                    color: "#ef4444",
-                    fontSize: "12px",
-                } },
-                SP_REACT.createElement(FaTimes, { size: 10, style: { marginRight: "4px" } }),
-                " Cancel"))),
-        item.status === "downloading" && (SP_REACT.createElement(SP_REACT.Fragment, null, item.progress_percent === 0 && item.downloaded_bytes === 0 ? (SP_REACT.createElement("div", { style: { fontSize: "12px", color: "#888", fontStyle: "italic" } }, "Preparing download...")) : (SP_REACT.createElement(SP_REACT.Fragment, null,
-            SP_REACT.createElement("div", { style: {
-                    width: "100%",
-                    height: "6px",
-                    backgroundColor: "#333",
-                    borderRadius: "3px",
-                    overflow: "hidden",
-                    marginBottom: "8px",
-                } },
-                SP_REACT.createElement("div", { style: {
-                        width: `${item.progress_percent}%`,
-                        height: "100%",
-                        backgroundColor: "#1a9fff",
-                        transition: "width 0.3s ease",
-                    } })),
-            SP_REACT.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: "12px", color: "#888" } },
-                SP_REACT.createElement("span", null,
-                    item.progress_percent.toFixed(1),
-                    "%"),
-                SP_REACT.createElement("span", null,
-                    formatBytes(item.downloaded_bytes),
-                    " / ",
-                    formatBytes(item.total_bytes)),
-                SP_REACT.createElement("span", null,
-                    item.speed_mbps.toFixed(1),
-                    " MB/s"),
-                SP_REACT.createElement("span", null,
-                    "ETA: ",
-                    formatETA(item.eta_seconds))))))),
-        item.status !== "downloading" && (SP_REACT.createElement("div", { style: { display: "flex", alignItems: "center", fontSize: "12px", color: statusColors[item.status] } },
-            item.status === "queued" && SP_REACT.createElement(FaDownload, { size: 10, style: { marginRight: "4px" } }),
-            item.status === "completed" && SP_REACT.createElement(FaCheck, { size: 10, style: { marginRight: "4px" } }),
-            item.status === "error" && SP_REACT.createElement(FaExclamationTriangle, { size: 10, style: { marginRight: "4px" } }),
-            SP_REACT.createElement("span", { style: { textTransform: "capitalize" } }, item.status),
-            item.error_message && (SP_REACT.createElement("span", { style: { marginLeft: "8px", color: "#888" } },
-                "- ",
-                item.error_message))))));
+        }, children: [SP_JSX.jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }, children: [SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", flex: 1 }, children: [SP_JSX.jsx(StoreIcon, { store: item.store }), SP_JSX.jsx("span", { style: { fontWeight: "bold", color: "#fff", fontSize: "14px" }, children: item.game_title })] }), (item.status === "completed" || item.status === "error" || item.status === "cancelled") && onClear && (SP_JSX.jsx(DFL.DialogButton, { onClick: () => onClear(item.id), style: {
+                            padding: "0",
+                            width: "20px",
+                            height: "20px",
+                            minWidth: "auto",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            backgroundColor: "transparent",
+                            color: "#666",
+                        }, children: SP_JSX.jsx(FaTimes, { size: 10 }) }))] }), (item.status === "downloading" || item.status === "queued") && (SP_JSX.jsx("div", { style: { marginBottom: "8px" }, children: SP_JSX.jsxs(DFL.DialogButton, { onClick: () => onCancel(item.id), style: {
+                        padding: "4px 12px",
+                        minWidth: "auto",
+                        backgroundColor: "rgba(239, 68, 68, 0.2)",
+                        color: "#ef4444",
+                        fontSize: "12px",
+                    }, children: [SP_JSX.jsx(FaTimes, { size: 10, style: { marginRight: "4px" } }), " Cancel"] }) })), item.status === "downloading" && (SP_JSX.jsx(SP_JSX.Fragment, { children: item.progress_percent === 0 && item.downloaded_bytes === 0 ? (SP_JSX.jsx("div", { style: { fontSize: "12px", color: "#888", fontStyle: "italic" }, children: "Preparing download..." })) : (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx("div", { style: {
+                                width: "100%",
+                                height: "6px",
+                                backgroundColor: "#333",
+                                borderRadius: "3px",
+                                overflow: "hidden",
+                                marginBottom: "8px",
+                            }, children: SP_JSX.jsx("div", { style: {
+                                    width: `${item.progress_percent}%`,
+                                    height: "100%",
+                                    backgroundColor: "#1a9fff",
+                                    transition: "width 0.3s ease",
+                                } }) }), SP_JSX.jsxs("div", { style: { display: "flex", justifyContent: "space-between", fontSize: "12px", color: "#888" }, children: [SP_JSX.jsxs("span", { children: [item.progress_percent.toFixed(1), "%"] }), SP_JSX.jsxs("span", { children: [formatBytes(item.downloaded_bytes), " / ", formatBytes(item.total_bytes)] }), SP_JSX.jsxs("span", { children: [item.speed_mbps.toFixed(1), " MB/s"] }), SP_JSX.jsxs("span", { children: ["ETA: ", formatETA(item.eta_seconds)] })] })] })) })), item.status !== "downloading" && (SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", fontSize: "12px", color: statusColors[item.status] }, children: [item.status === "queued" && SP_JSX.jsx(FaDownload, { size: 10, style: { marginRight: "4px" } }), item.status === "completed" && SP_JSX.jsx(FaCheck, { size: 10, style: { marginRight: "4px" } }), item.status === "error" && SP_JSX.jsx(FaExclamationTriangle, { size: 10, style: { marginRight: "4px" } }), SP_JSX.jsx("span", { style: { textTransform: "capitalize" }, children: item.status }), item.error_message && (SP_JSX.jsxs("span", { style: { marginLeft: "8px", color: "#888" }, children: ["- ", item.error_message] }))] }))] }));
 };
 /**
  * Empty state display
  */
-const EmptyState = ({ message }) => (SP_REACT.createElement("div", { style: {
+const EmptyState = ({ message }) => (SP_JSX.jsx("div", { style: {
         textAlign: "center",
         padding: "20px",
         color: "#888",
         fontSize: "14px",
-    } }, message));
+    }, children: message }));
 /**
  * Main Downloads Tab Component
  */
@@ -1302,29 +1269,14 @@ const DownloadsTab = () => {
         }
     };
     if (loading) {
-        return (SP_REACT.createElement(DFL.PanelSection, { title: "DOWNLOADS" },
-            SP_REACT.createElement(DFL.PanelSectionRow, null,
-                SP_REACT.createElement(DFL.Field, { label: "Loading..." },
-                    SP_REACT.createElement("span", { style: { color: "#888" } }, "Fetching download queue...")))));
+        return (SP_JSX.jsx(DFL.PanelSection, { title: "DOWNLOADS", children: SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Loading...", children: SP_JSX.jsx("span", { style: { color: "#888" }, children: "Fetching download queue..." }) }) }) }));
     }
     const current = queueInfo?.current;
     const queued = queueInfo?.queued || [];
     const finished = queueInfo?.finished || [];
     const hasActiveDownloads = current || queued.length > 0;
-    return (SP_REACT.createElement(SP_REACT.Fragment, null,
-        SP_REACT.createElement(DFL.PanelSection, { title: "CURRENT DOWNLOAD" }, current ? (SP_REACT.createElement(DownloadItemRow, { item: current, isCurrent: true, onCancel: handleCancel })) : (SP_REACT.createElement(EmptyState, { message: "No active downloads" }))),
-        queued.length > 0 && (SP_REACT.createElement(DFL.PanelSection, { title: `QUEUED (${queued.length})` }, queued.map((item) => (SP_REACT.createElement(DownloadItemRow, { key: item.id, item: item, isCurrent: false, onCancel: handleCancel }))))),
-        finished.length > 0 && (SP_REACT.createElement(DFL.PanelSection, { title: "RECENTLY COMPLETED" }, finished.slice(0, 5).map((item) => (SP_REACT.createElement(DownloadItemRow, { key: item.id, item: item, isCurrent: false, onCancel: () => { }, onClear: handleClear }))))),
-        !hasActiveDownloads && finished.length === 0 && (SP_REACT.createElement(DFL.PanelSection, null,
-            SP_REACT.createElement(EmptyState, { message: "No downloads. Install games from your library to see them here." })))));
+    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSection, { title: "CURRENT DOWNLOAD", children: current ? (SP_JSX.jsx(DownloadItemRow, { item: current, isCurrent: true, onCancel: handleCancel })) : (SP_JSX.jsx(EmptyState, { message: "No active downloads" })) }), queued.length > 0 && (SP_JSX.jsx(DFL.PanelSection, { title: `QUEUED (${queued.length})`, children: queued.map((item) => (SP_JSX.jsx(DownloadItemRow, { item: item, isCurrent: false, onCancel: handleCancel }, item.id))) })), finished.length > 0 && (SP_JSX.jsx(DFL.PanelSection, { title: "RECENTLY COMPLETED", children: finished.slice(0, 5).map((item) => (SP_JSX.jsx(DownloadItemRow, { item: item, isCurrent: false, onCancel: () => { }, onClear: handleClear }, item.id))) })), !hasActiveDownloads && finished.length === 0 && (SP_JSX.jsx(DFL.PanelSection, { children: SP_JSX.jsx(EmptyState, { message: "No downloads. Install games from your library to see them here." }) }))] }));
 };
-
-/**
- * Settings Tab Component
- *
- * Contains storage location configuration.
- * Extracted from Content() for tab-based navigation.
- */
 
 /**
  * Storage Location Settings Component
@@ -1385,12 +1337,7 @@ const StorageSettings = () => {
         label: `${loc.label} (${loc.free_space_gb} GB free)`,
     }));
     const selectedOption = dropdownOptions.find((opt) => opt.data === defaultStorage);
-    return (SP_REACT.createElement(DFL.PanelSection, { title: "DOWNLOAD SETTINGS" },
-        SP_REACT.createElement(DFL.PanelSectionRow, null,
-            SP_REACT.createElement(DFL.Field, { label: "Install Location", description: "Where new games will be downloaded" }, dropdownOptions.length > 0 ? (SP_REACT.createElement(DFL.Dropdown, { rgOptions: dropdownOptions, selectedOption: selectedOption?.data, onChange: handleStorageChange, disabled: saving })) : (SP_REACT.createElement("span", { style: { color: "#888", fontSize: "12px" } }, "Loading storage options...")))),
-        locations.length > 0 && (SP_REACT.createElement(DFL.PanelSectionRow, null,
-            SP_REACT.createElement(DFL.Field, { label: "Path" },
-                SP_REACT.createElement("span", { style: { color: "#888", fontSize: "12px" } }, locations.find((l) => l.id === defaultStorage)?.path || "Unknown"))))));
+    return (SP_JSX.jsxs(DFL.PanelSection, { title: "DOWNLOAD SETTINGS", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Install Location", description: "Where new games will be downloaded", children: dropdownOptions.length > 0 ? (SP_JSX.jsx(DFL.Dropdown, { rgOptions: dropdownOptions, selectedOption: selectedOption?.data, onChange: handleStorageChange, disabled: saving })) : (SP_JSX.jsx("span", { style: { color: "#888", fontSize: "12px" }, children: "Loading storage options..." })) }) }), locations.length > 0 && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Path", children: SP_JSX.jsx("span", { style: { color: "#888", fontSize: "12px" }, children: locations.find((l) => l.id === defaultStorage)?.path || "Unknown" }) }) }))] }));
 };
 
 // ========== INSTALL BUTTON FEATURE ==========
@@ -1611,13 +1558,13 @@ const InstallInfoDisplay = ({ appId }) => {
     };
     // Confirmation wrapper functions using native Steam modal
     const showInstallConfirmation = () => {
-        DFL.showModal(SP_REACT.createElement(DFL.ConfirmModal, { strTitle: "Confirm Installation", strDescription: `Are you sure you want to install ${gameInfo?.title}?`, strOKButtonText: "Yes", strCancelButtonText: "No", onOK: () => handleInstall() }));
+        DFL.showModal(SP_JSX.jsx(DFL.ConfirmModal, { strTitle: "Confirm Installation", strDescription: `Are you sure you want to install ${gameInfo?.title}?`, strOKButtonText: "Yes", strCancelButtonText: "No", onOK: () => handleInstall() }));
     };
     const showUninstallConfirmation = () => {
-        DFL.showModal(SP_REACT.createElement(DFL.ConfirmModal, { strTitle: "Confirm Uninstallation", strDescription: `Are you sure you want to uninstall ${gameInfo?.title}?`, strOKButtonText: "Yes", strCancelButtonText: "No", bDestructiveWarning: true, onOK: () => handleUninstall() }));
+        DFL.showModal(SP_JSX.jsx(DFL.ConfirmModal, { strTitle: "Confirm Uninstallation", strDescription: `Are you sure you want to uninstall ${gameInfo?.title}?`, strOKButtonText: "Yes", strCancelButtonText: "No", bDestructiveWarning: true, onOK: () => handleUninstall() }));
     };
     const showCancelConfirmation = () => {
-        DFL.showModal(SP_REACT.createElement(DFL.ConfirmModal, { strTitle: "Confirm Cancellation", strDescription: `Are you sure you want to cancel the download for ${gameInfo?.title}?`, strOKButtonText: "Yes", strCancelButtonText: "No", bDestructiveWarning: true, onOK: () => handleCancel() }));
+        DFL.showModal(SP_JSX.jsx(DFL.ConfirmModal, { strTitle: "Confirm Cancellation", strDescription: `Are you sure you want to cancel the download for ${gameInfo?.title}?`, strOKButtonText: "Yes", strCancelButtonText: "No", bDestructiveWarning: true, onOK: () => handleCancel() }));
     };
     // Not a Unifideck game - return null
     if (!gameInfo || gameInfo.error)
@@ -1657,15 +1604,12 @@ const InstallInfoDisplay = ({ appId }) => {
         buttonText = `⬇ Install ${gameInfo.title}${sizeText}`;
         buttonAction = showInstallConfirmation;
     }
-    return (SP_REACT.createElement(SP_REACT.Fragment, null,
-        "      ",
-        SP_REACT.createElement(DFL.Focusable, { style: {
-                position: 'absolute',
-                top: '40px', // Aligned with ProtonDB badge row
-                right: '35px',
-                zIndex: 1000,
-            } },
-            SP_REACT.createElement(DFL.DialogButton, { onClick: buttonAction, disabled: processing, style: buttonStyle }, processing ? 'Processing...' : buttonText))));
+    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: ["      ", SP_JSX.jsx(DFL.Focusable, { style: {
+                    position: 'absolute',
+                    top: '40px', // Aligned with ProtonDB badge row
+                    right: '35px',
+                    zIndex: 1000,
+                }, children: SP_JSX.jsx(DFL.DialogButton, { onClick: buttonAction, disabled: processing, style: buttonStyle, children: processing ? 'Processing...' : buttonText }) })] }));
 };
 // Patch function for game details route - EXTRACTED TO MODULE SCOPE (ProtonDB/HLTB pattern)
 // This ensures the patch is registered in the correct Decky loader context
@@ -1772,6 +1716,7 @@ const Content = () => {
     const [storeStatus, setStoreStatus] = SP_REACT.useState({
         epic: "Checking...",
         gog: "Checking...",
+        amazon: "Checking...",
     });
     const [authDialog, setAuthDialog] = SP_REACT.useState({
         show: false,
@@ -1907,18 +1852,24 @@ const Content = () => {
             if (result.success) {
                 setStoreStatus({
                     epic: result.epic,
-                    gog: result.gog
+                    gog: result.gog,
+                    amazon: result.amazon
                 });
                 // Show warning if legendary not installed
                 if (result.legendary_installed === false) {
                     console.warn("[Unifideck] Legendary CLI not installed - Epic Games won't work");
+                }
+                // Show warning if nile not installed
+                if (result.nile_installed === false) {
+                    console.warn("[Unifideck] Nile CLI not installed - Amazon Games won't work");
                 }
             }
             else {
                 console.error("[Unifideck] Status check failed:", result.error);
                 setStoreStatus({
                     epic: "Error - Check logs",
-                    gog: "Error - Check logs"
+                    gog: "Error - Check logs",
+                    amazon: "Error - Check logs"
                 });
             }
         }
@@ -1926,7 +1877,8 @@ const Content = () => {
             console.error("[Unifideck] Error checking store status:", error);
             setStoreStatus({
                 epic: "Error - " + error.message,
-                gog: "Error - " + error.message
+                gog: "Error - " + error.message,
+                amazon: "Error - " + error.message
             });
         }
     };
@@ -2016,7 +1968,8 @@ const Content = () => {
             console.log("[Unifideck] ========== SYNC COMPLETED ==========");
             console.log(`[Unifideck] Epic Games: ${syncResult.epic_count}`);
             console.log(`[Unifideck] GOG Games: ${syncResult.gog_count}`);
-            console.log(`[Unifideck] Total Games: ${syncResult.epic_count + syncResult.gog_count}`);
+            console.log(`[Unifideck] Amazon Games: ${syncResult.amazon_count || 0}`);
+            console.log(`[Unifideck] Total Games: ${syncResult.epic_count + syncResult.gog_count + (syncResult.amazon_count || 0)}`);
             console.log(`[Unifideck] Games Added: ${syncResult.added_count}`);
             console.log(`[Unifideck] Artwork Fetched: ${syncResult.artwork_count}`);
             console.log("[Unifideck] =====================================");
@@ -2064,7 +2017,16 @@ const Content = () => {
             try {
                 const result = await call("check_store_status");
                 if (result.success) {
-                    const status = store === 'epic' ? result.epic : result.gog;
+                    let status;
+                    if (store === 'epic') {
+                        status = result.epic;
+                    }
+                    else if (store === 'gog') {
+                        status = result.gog;
+                    }
+                    else {
+                        status = result.amazon;
+                    }
                     if (status === "Connected") {
                         console.log(`[Unifideck] ${store} authentication completed automatically!`);
                         return true;
@@ -2099,7 +2061,16 @@ const Content = () => {
     };
     const startAuth = async (store) => {
         try {
-            const methodName = store === 'epic' ? 'start_epic_auth' : 'start_gog_auth_auto';
+            let methodName;
+            if (store === 'epic') {
+                methodName = 'start_epic_auth';
+            }
+            else if (store === 'gog') {
+                methodName = 'start_gog_auth_auto';
+            }
+            else {
+                methodName = 'start_amazon_auth';
+            }
             const result = await call(methodName);
             if (result.success && result.url) {
                 const authUrl = result.url;
@@ -2174,7 +2145,16 @@ const Content = () => {
     };
     const handleLogout = async (store) => {
         try {
-            const methodName = store === 'epic' ? 'logout_epic' : 'logout_gog';
+            let methodName;
+            if (store === 'epic') {
+                methodName = 'logout_epic';
+            }
+            else if (store === 'gog') {
+                methodName = 'logout_gog';
+            }
+            else {
+                methodName = 'logout_amazon';
+            }
             const result = await call(methodName);
             if (result.success) {
                 console.log(`[Unifideck] Logged out from ${store}`);
@@ -2250,241 +2230,141 @@ const Content = () => {
             console.error("[Unifideck] Error cancelling sync:", error);
         }
     };
-    return (SP_REACT.createElement(SP_REACT.Fragment, null,
-        SP_REACT.createElement(DFL.PanelSection, null,
-            SP_REACT.createElement(DFL.PanelSectionRow, null,
-                SP_REACT.createElement("div", { ref: mountRef, style: { width: "100%" } },
-                    SP_REACT.createElement(DFL.Focusable, { style: {
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "4px",
-                            width: "100%",
-                        } },
-                        SP_REACT.createElement(DFL.DialogButton, { onClick: () => setActiveTab('settings'), style: {
+    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSection, { children: SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { ref: mountRef, style: { width: "100%" }, children: SP_JSX.jsxs(DFL.Focusable, { style: {
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "4px",
                                 width: "100%",
-                                padding: "8px 12px",
-                                fontSize: "13px",
-                                backgroundColor: activeTab === 'settings' ? '#1a9fff' : 'transparent',
-                                border: activeTab === 'settings' ? 'none' : '1px solid #444',
-                                borderRadius: '4px',
-                                fontWeight: activeTab === 'settings' ? 'bold' : 'normal',
-                                textAlign: "left",
-                                justifyContent: "flex-start",
-                                display: "flex",
-                                alignItems: "center",
-                            } }, "\u2699\uFE0F Settings"),
-                        SP_REACT.createElement(DFL.DialogButton, { onClick: () => setActiveTab('downloads'), style: {
-                                width: "100%",
-                                padding: "8px 12px",
-                                fontSize: "13px",
-                                backgroundColor: activeTab === 'downloads' ? '#1a9fff' : 'transparent',
-                                border: activeTab === 'downloads' ? 'none' : '1px solid #444',
-                                borderRadius: '4px',
-                                fontWeight: activeTab === 'downloads' ? 'bold' : 'normal',
-                                textAlign: "left",
-                                justifyContent: "flex-start",
-                                display: "flex",
-                                alignItems: "center",
-                            } }, "\u2B07\uFE0F Downloads"))))),
-        activeTab === 'downloads' && (SP_REACT.createElement(SP_REACT.Fragment, null,
-            SP_REACT.createElement(DownloadsTab, null),
-            SP_REACT.createElement(StorageSettings, null))),
-        activeTab === 'settings' && (SP_REACT.createElement(SP_REACT.Fragment, null,
-            SP_REACT.createElement(DFL.PanelSection, { title: "Unifideck Settings" },
-                SP_REACT.createElement(DFL.PanelSectionRow, null,
-                    SP_REACT.createElement("div", { style: { display: "flex", flexDirection: "column", gap: "10px" } },
-                        SP_REACT.createElement("div", null, "Add Epic and GOG games to your Steam Deck library."),
-                        SP_REACT.createElement("div", { style: { fontSize: "12px", opacity: 0.7 } }, "All your games under one roof.")))),
-            SP_REACT.createElement(DFL.PanelSection, { title: "Epic Games" },
-                SP_REACT.createElement(DFL.PanelSectionRow, null,
-                    SP_REACT.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" } },
-                        SP_REACT.createElement("div", { style: { fontSize: "14px" } },
-                            "Status: ",
-                            storeStatus.epic === "Connected" ? "✓ Connected" :
-                                storeStatus.epic === "Legendary not installed" ? "⚠️ Installing..." :
-                                    storeStatus.epic === "Checking..." ? "Checking..." :
-                                        storeStatus.epic.includes("Error") ? `❌ ${storeStatus.epic}` :
-                                            "✗ Not Connected"))),
-                SP_REACT.createElement(DFL.PanelSectionRow, null,
-                    SP_REACT.createElement("div", null, storeStatus.epic === "Connected" ? (SP_REACT.createElement(DFL.ButtonItem, { layout: "below", onClick: () => handleLogout('epic') },
-                        SP_REACT.createElement("div", { style: { fontSize: "0.85em", padding: "2px" } }, "Logout"))) : storeStatus.epic !== "Checking..." && !storeStatus.epic.includes("Error") && storeStatus.epic !== "Legendary not installed" ? (SP_REACT.createElement(DFL.ButtonItem, { layout: "below", onClick: () => startAuth('epic') },
-                        SP_REACT.createElement("div", { style: { fontSize: "0.85em", padding: "2px" } }, "Authenticate"))) : null)),
-                storeStatus.epic === "Legendary not installed" && (SP_REACT.createElement(DFL.PanelSectionRow, null,
-                    SP_REACT.createElement("div", { style: { fontSize: '11px', opacity: 0.7 } }, "Installing legendary CLI automatically...")))),
-            SP_REACT.createElement(DFL.PanelSection, { title: "GOG" },
-                SP_REACT.createElement(DFL.PanelSectionRow, null,
-                    SP_REACT.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" } },
-                        SP_REACT.createElement("div", { style: { fontSize: "14px" } },
-                            "Status: ",
-                            storeStatus.gog === "Connected" ? "✓ Connected" :
-                                storeStatus.gog === "Checking..." ? "Checking..." :
-                                    storeStatus.gog.includes("Error") ? `❌ ${storeStatus.gog}` :
-                                        "✗ Not Connected"))),
-                SP_REACT.createElement(DFL.PanelSectionRow, null,
-                    SP_REACT.createElement("div", null, storeStatus.gog === "Connected" ? (SP_REACT.createElement(DFL.ButtonItem, { layout: "below", onClick: () => handleLogout('gog') },
-                        SP_REACT.createElement("div", { style: { fontSize: "0.85em", padding: "2px" } }, "Logout"))) : storeStatus.gog !== "Checking..." && !storeStatus.gog.includes("Error") ? (SP_REACT.createElement(DFL.ButtonItem, { layout: "below", onClick: () => startAuth('gog') },
-                        SP_REACT.createElement("div", { style: { fontSize: "0.85em", padding: "2px" } }, "Authenticate"))) : null))),
-            SP_REACT.createElement(DFL.PanelSection, { title: "LIBRARY SYNC" },
-                SP_REACT.createElement(DFL.PanelSectionRow, null,
-                    SP_REACT.createElement(DFL.ButtonItem, { layout: "below", onClick: () => handleManualSync(false), disabled: syncing || syncCooldown },
-                        SP_REACT.createElement("div", { style: {
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "2px",
-                                justifyContent: "center",
-                                fontSize: "0.85em",
-                                padding: "2px"
-                            } },
-                            SP_REACT.createElement(FaSync, { style: {
-                                    animation: syncing ? "spin 1s linear infinite" : "none",
-                                    opacity: syncCooldown ? 0.5 : 1,
-                                    fontSize: "10px"
-                                } }),
-                            syncing
-                                ? "Syncing..."
-                                : syncCooldown
-                                    ? `${cooldownSeconds}s`
-                                    : "Sync Libraries"))),
-                SP_REACT.createElement(DFL.PanelSectionRow, null,
-                    SP_REACT.createElement(DFL.ButtonItem, { layout: "below", onClick: () => handleManualSync(true), disabled: syncing || syncCooldown },
-                        SP_REACT.createElement("div", { style: {
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "2px",
-                                justifyContent: "center",
-                                color: "#ff9800",
-                                fontSize: "0.85em",
-                                padding: "2px"
-                            } },
-                            SP_REACT.createElement(FaSync, { style: {
-                                    animation: syncing ? "spin 1s linear infinite" : "none",
-                                    opacity: syncCooldown ? 0.5 : 1,
-                                    fontSize: "10px"
-                                } }),
-                            syncing
-                                ? "..."
-                                : syncCooldown
-                                    ? `${cooldownSeconds}s`
-                                    : "Force Sync"))),
-                syncing && (SP_REACT.createElement(DFL.PanelSectionRow, null,
-                    SP_REACT.createElement(DFL.ButtonItem, { layout: "below", onClick: handleCancelSync },
-                        SP_REACT.createElement("div", { style: { display: "flex", alignItems: "center", gap: "8px", color: "#ff6b6b" } }, "Cancel Sync")))),
-                syncProgress && syncProgress.status !== 'idle' && (SP_REACT.createElement(DFL.PanelSectionRow, null,
-                    SP_REACT.createElement("div", { style: { fontSize: '12px', width: '100%' } },
-                        SP_REACT.createElement("div", { style: { marginBottom: '5px', opacity: 0.9 } }, syncProgress.current_game),
-                        SP_REACT.createElement("div", { style: {
-                                width: '100%',
-                                height: '4px',
-                                backgroundColor: '#333',
-                                borderRadius: '2px',
-                                overflow: 'hidden'
-                            } },
-                            SP_REACT.createElement("div", { style: {
-                                    width: `${syncProgress.progress_percent}%`,
-                                    height: '100%',
-                                    backgroundColor: syncProgress.status === 'error' ? '#ff6b6b' :
-                                        syncProgress.status === 'complete' ? '#4caf50' :
-                                            syncProgress.current_phase === 'artwork' ? '#ff9800' : // Orange for artwork
-                                                '#1a9fff', // Blue for sync
-                                    transition: 'width 0.3s ease'
-                                } })),
-                        SP_REACT.createElement("div", { style: { marginTop: '5px', opacity: 0.7 } }, syncProgress.current_phase === 'artwork' ? (
-                        // Artwork phase: show artwork progress
-                        SP_REACT.createElement(SP_REACT.Fragment, null,
-                            syncProgress.artwork_synced,
-                            " / ",
-                            syncProgress.artwork_total,
-                            " artwork downloaded")) : (
-                        // Sync phase: show game progress
-                        SP_REACT.createElement(SP_REACT.Fragment, null,
-                            syncProgress.synced_games,
-                            " / ",
-                            syncProgress.total_games,
-                            " games synced"))),
-                        syncProgress.error && (SP_REACT.createElement("div", { style: { color: '#ff6b6b', marginTop: '5px' } },
-                            "Error: ",
-                            syncProgress.error))))),
-                (storeStatus.epic.includes("Error") || storeStatus.gog.includes("Error")) && (SP_REACT.createElement(DFL.PanelSectionRow, null,
-                    SP_REACT.createElement(DFL.ButtonItem, { layout: "below", onClick: checkStoreStatus }, "Retry Status Check")))),
-            SP_REACT.createElement(DFL.PanelSection, { title: "Cleanup" }, !showDeleteConfirm ? (SP_REACT.createElement(DFL.PanelSectionRow, null,
-                SP_REACT.createElement(DFL.ButtonItem, { layout: "below", onClick: handleDeleteAll, disabled: syncing || deleting || syncCooldown },
-                    SP_REACT.createElement("div", { style: { display: "flex", alignItems: "center", gap: "2px", fontSize: "0.85em", padding: "2px" } },
-                        SP_REACT.createElement(FaTrash, { style: { fontSize: "10px" } }),
-                        "Delete all UNIFIDECK Libraries and Cache")))) : (SP_REACT.createElement(SP_REACT.Fragment, null,
-                SP_REACT.createElement(DFL.PanelSectionRow, null,
-                    SP_REACT.createElement("div", { style: { color: "#ff6b6b", fontWeight: "bold" } }, "Are you sure? This will delete ALL Unifideck games, artwork, auth tokens, and cache. This action is irreversible.")),
-                SP_REACT.createElement(DFL.PanelSectionRow, null,
-                    SP_REACT.createElement("div", { style: {
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "10px",
-                            margin: "10px 0"
-                        } },
-                        SP_REACT.createElement(DFL.ToggleField, { label: "Also delete installed game files? (Destructive)", checked: deleteFiles, onChange: (checked) => setDeleteFiles(checked) }))),
-                SP_REACT.createElement(DFL.PanelSectionRow, null,
-                    SP_REACT.createElement(DFL.ButtonItem, { layout: "below", onClick: handleDeleteAll, disabled: deleting },
-                        SP_REACT.createElement("div", { style: { color: "#ff6b6b", fontSize: "0.85em", padding: "2px" } }, deleting ? "Deleting..." : "Yes, Delete Everything"))),
-                SP_REACT.createElement(DFL.PanelSectionRow, null,
-                    SP_REACT.createElement(DFL.ButtonItem, { layout: "below", onClick: () => {
-                            setShowDeleteConfirm(false);
-                            setDeleteFiles(false);
-                        }, disabled: deleting },
-                        SP_REACT.createElement("div", { style: { fontSize: "0.85em", padding: "2px" } }, "Cancel")))))),
-            authDialog.show && (SP_REACT.createElement("div", { style: {
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 10000
-                } },
-                SP_REACT.createElement("div", { style: {
-                        backgroundColor: '#1e2329',
-                        padding: '20px',
-                        borderRadius: '8px',
-                        maxWidth: '500px',
-                        width: '90%',
-                        maxHeight: '80vh',
-                        overflow: 'auto'
-                    } },
-                    SP_REACT.createElement("h2", { style: { marginTop: 0 } },
-                        authDialog.store === 'epic' ? 'Epic Games' : 'GOG',
-                        " Authentication"),
-                    SP_REACT.createElement("div", null,
-                        SP_REACT.createElement("div", { style: { marginBottom: '15px', fontSize: '14px' } }, authDialog.processing ? (SP_REACT.createElement("div", null,
-                            SP_REACT.createElement("p", null, "Please complete the login in the popup window."),
-                            SP_REACT.createElement("p", { style: { fontSize: '0.9em', color: '#888', marginTop: '5px' } }, "The window will close automatically after authentication."),
-                            SP_REACT.createElement("div", { style: { marginTop: '20px', textAlign: 'center' } },
-                                SP_REACT.createElement("div", { style: { fontSize: '32px' } }, "\u23F3"),
-                                SP_REACT.createElement("p", { style: { fontSize: '12px', opacity: 0.7, marginTop: '10px' } }, "Waiting for authentication...")))) : (SP_REACT.createElement("div", null,
-                            SP_REACT.createElement("p", null, "\u2713 Ready to authenticate")))),
-                        authDialog.error && (SP_REACT.createElement("div", { style: {
-                                marginBottom: '15px',
-                                padding: '10px',
-                                backgroundColor: '#5c1f1f',
-                                borderRadius: '4px',
-                                fontSize: '13px'
-                            } },
-                            authDialog.error,
-                            authDialog.error.includes('cross-origin') && (SP_REACT.createElement("p", { style: { fontSize: '0.8em', marginTop: '5px' } }, "The popup closed before authentication could complete. Please try again.")))),
-                        SP_REACT.createElement("div", { style: { display: 'flex', gap: '10px' } },
-                            SP_REACT.createElement("button", { onClick: () => setAuthDialog({ show: false, store: null, url: '', code: '', processing: false, error: '', autoMode: false }), style: {
-                                    flex: 1,
-                                    padding: '10px',
-                                    backgroundColor: '#3d4450',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    color: 'white',
-                                    cursor: 'pointer'
-                                } }, authDialog.processing ? 'Cancel' : 'Close'))))))))));
+                            }, children: [SP_JSX.jsx(DFL.DialogButton, { onClick: () => setActiveTab('settings'), style: {
+                                        width: "100%",
+                                        padding: "8px 12px",
+                                        fontSize: "13px",
+                                        backgroundColor: activeTab === 'settings' ? '#1a9fff' : 'transparent',
+                                        border: activeTab === 'settings' ? 'none' : '1px solid #444',
+                                        borderRadius: '4px',
+                                        fontWeight: activeTab === 'settings' ? 'bold' : 'normal',
+                                        textAlign: "left",
+                                        justifyContent: "flex-start",
+                                        display: "flex",
+                                        alignItems: "center",
+                                    }, children: "\u2699\uFE0F Settings" }), SP_JSX.jsx(DFL.DialogButton, { onClick: () => setActiveTab('downloads'), style: {
+                                        width: "100%",
+                                        padding: "8px 12px",
+                                        fontSize: "13px",
+                                        backgroundColor: activeTab === 'downloads' ? '#1a9fff' : 'transparent',
+                                        border: activeTab === 'downloads' ? 'none' : '1px solid #444',
+                                        borderRadius: '4px',
+                                        fontWeight: activeTab === 'downloads' ? 'bold' : 'normal',
+                                        textAlign: "left",
+                                        justifyContent: "flex-start",
+                                        display: "flex",
+                                        alignItems: "center",
+                                    }, children: "\u2B07\uFE0F Downloads" })] }) }) }) }), activeTab === 'downloads' && (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DownloadsTab, {}), SP_JSX.jsx(StorageSettings, {})] })), activeTab === 'settings' && (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSection, { title: "Unifideck Settings", children: SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "10px" }, children: [SP_JSX.jsx("div", { children: "Add Epic, GOG, and Amazon games to your Steam Deck library." }), SP_JSX.jsx("div", { style: { fontSize: "12px", opacity: 0.7 }, children: "All your games under one roof." })] }) }) }), SP_JSX.jsxs(DFL.PanelSection, { title: "Epic Games", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }, children: SP_JSX.jsxs("div", { style: { fontSize: "14px" }, children: ["Status: ", storeStatus.epic === "Connected" ? "✓ Connected" :
+                                                storeStatus.epic === "Legendary not installed" ? "⚠️ Installing..." :
+                                                    storeStatus.epic === "Checking..." ? "Checking..." :
+                                                        storeStatus.epic.includes("Error") ? `❌ ${storeStatus.epic}` :
+                                                            "✗ Not Connected"] }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { children: storeStatus.epic === "Connected" ? (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleLogout('epic'), children: SP_JSX.jsx("div", { style: { fontSize: "0.85em", padding: "2px" }, children: "Logout" }) })) : storeStatus.epic !== "Checking..." && !storeStatus.epic.includes("Error") && storeStatus.epic !== "Legendary not installed" ? (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => startAuth('epic'), children: SP_JSX.jsx("div", { style: { fontSize: "0.85em", padding: "2px" }, children: "Authenticate" }) })) : null }) }), storeStatus.epic === "Legendary not installed" && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { fontSize: '11px', opacity: 0.7 }, children: "Installing legendary CLI automatically..." }) }))] }), SP_JSX.jsxs(DFL.PanelSection, { title: "GOG", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }, children: SP_JSX.jsxs("div", { style: { fontSize: "14px" }, children: ["Status: ", storeStatus.gog === "Connected" ? "✓ Connected" :
+                                                storeStatus.gog === "Checking..." ? "Checking..." :
+                                                    storeStatus.gog.includes("Error") ? `❌ ${storeStatus.gog}` :
+                                                        "✗ Not Connected"] }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { children: storeStatus.gog === "Connected" ? (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleLogout('gog'), children: SP_JSX.jsx("div", { style: { fontSize: "0.85em", padding: "2px" }, children: "Logout" }) })) : storeStatus.gog !== "Checking..." && !storeStatus.gog.includes("Error") ? (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => startAuth('gog'), children: SP_JSX.jsx("div", { style: { fontSize: "0.85em", padding: "2px" }, children: "Authenticate" }) })) : null }) })] }), SP_JSX.jsxs(DFL.PanelSection, { title: "AMAZON GAMES", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }, children: SP_JSX.jsxs("div", { style: { fontSize: "14px" }, children: ["Status: ", storeStatus.amazon === "Connected" ? "✓ Connected" :
+                                                storeStatus.amazon === "Nile not installed" ? "⚠️ Missing CLI" :
+                                                    storeStatus.amazon === "Checking..." ? "Checking..." :
+                                                        storeStatus.amazon.includes("Error") ? `❌ ${storeStatus.amazon}` :
+                                                            "✗ Not Connected"] }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { children: storeStatus.amazon === "Connected" ? (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleLogout('amazon'), children: SP_JSX.jsx("div", { style: { fontSize: "0.85em", padding: "2px" }, children: "Logout" }) })) : storeStatus.amazon !== "Checking..." && !storeStatus.amazon.includes("Error") && storeStatus.amazon !== "Nile not installed" ? (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => startAuth('amazon'), children: SP_JSX.jsx("div", { style: { fontSize: "0.85em", padding: "2px" }, children: "Authenticate" }) })) : null }) }), storeStatus.amazon === "Nile not installed" && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { fontSize: '11px', opacity: 0.7 }, children: "Nile CLI not found. Amazon Games unavailable." }) }))] }), SP_JSX.jsxs(DFL.PanelSection, { title: "LIBRARY SYNC", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleManualSync(false), disabled: syncing || syncCooldown, children: SP_JSX.jsxs("div", { style: {
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "2px",
+                                            justifyContent: "center",
+                                            fontSize: "0.85em",
+                                            padding: "2px"
+                                        }, children: [SP_JSX.jsx(FaSync, { style: {
+                                                    animation: syncing ? "spin 1s linear infinite" : "none",
+                                                    opacity: syncCooldown ? 0.5 : 1,
+                                                    fontSize: "10px"
+                                                } }), syncing
+                                                ? "Syncing..."
+                                                : syncCooldown
+                                                    ? `${cooldownSeconds}s`
+                                                    : "Sync Libraries"] }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => handleManualSync(true), disabled: syncing || syncCooldown, children: SP_JSX.jsxs("div", { style: {
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "2px",
+                                            justifyContent: "center",
+                                            color: "#ff9800",
+                                            fontSize: "0.85em",
+                                            padding: "2px"
+                                        }, children: [SP_JSX.jsx(FaSync, { style: {
+                                                    animation: syncing ? "spin 1s linear infinite" : "none",
+                                                    opacity: syncCooldown ? 0.5 : 1,
+                                                    fontSize: "10px"
+                                                } }), syncing
+                                                ? "..."
+                                                : syncCooldown
+                                                    ? `${cooldownSeconds}s`
+                                                    : "Force Sync"] }) }) }), syncing && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: handleCancelSync, children: SP_JSX.jsx("div", { style: { display: "flex", alignItems: "center", gap: "8px", color: "#ff6b6b" }, children: "Cancel Sync" }) }) })), syncProgress && syncProgress.status !== 'idle' && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { fontSize: '12px', width: '100%' }, children: [SP_JSX.jsx("div", { style: { marginBottom: '5px', opacity: 0.9 }, children: syncProgress.current_game }), SP_JSX.jsx("div", { style: {
+                                                width: '100%',
+                                                height: '4px',
+                                                backgroundColor: '#333',
+                                                borderRadius: '2px',
+                                                overflow: 'hidden'
+                                            }, children: SP_JSX.jsx("div", { style: {
+                                                    width: `${syncProgress.progress_percent}%`,
+                                                    height: '100%',
+                                                    backgroundColor: syncProgress.status === 'error' ? '#ff6b6b' :
+                                                        syncProgress.status === 'complete' ? '#4caf50' :
+                                                            syncProgress.current_phase === 'artwork' ? '#ff9800' : // Orange for artwork
+                                                                '#1a9fff', // Blue for sync
+                                                    transition: 'width 0.3s ease'
+                                                } }) }), SP_JSX.jsx("div", { style: { marginTop: '5px', opacity: 0.7 }, children: syncProgress.current_phase === 'artwork' ? (
+                                            // Artwork phase: show artwork progress
+                                            SP_JSX.jsxs(SP_JSX.Fragment, { children: [syncProgress.artwork_synced, " / ", syncProgress.artwork_total, " artwork downloaded"] })) : (
+                                            // Sync phase: show game progress
+                                            SP_JSX.jsxs(SP_JSX.Fragment, { children: [syncProgress.synced_games, " / ", syncProgress.total_games, " games synced"] })) }), syncProgress.error && (SP_JSX.jsxs("div", { style: { color: '#ff6b6b', marginTop: '5px' }, children: ["Error: ", syncProgress.error] }))] }) })), (storeStatus.epic.includes("Error") || storeStatus.gog.includes("Error")) && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: checkStoreStatus, children: "Retry Status Check" }) }))] }), SP_JSX.jsx(DFL.PanelSection, { title: "Cleanup", children: !showDeleteConfirm ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: handleDeleteAll, disabled: syncing || deleting || syncCooldown, children: SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", gap: "2px", fontSize: "0.85em", padding: "2px" }, children: [SP_JSX.jsx(FaTrash, { style: { fontSize: "10px" } }), "Delete all UNIFIDECK Libraries and Cache"] }) }) })) : (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { color: "#ff6b6b", fontWeight: "bold" }, children: "Are you sure? This will delete ALL Unifideck games, artwork, auth tokens, and cache. This action is irreversible." }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: {
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "10px",
+                                            margin: "10px 0"
+                                        }, children: SP_JSX.jsx(DFL.ToggleField, { label: "Also delete installed game files? (Destructive)", checked: deleteFiles, onChange: (checked) => setDeleteFiles(checked) }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: handleDeleteAll, disabled: deleting, children: SP_JSX.jsx("div", { style: { color: "#ff6b6b", fontSize: "0.85em", padding: "2px" }, children: deleting ? "Deleting..." : "Yes, Delete Everything" }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => {
+                                            setShowDeleteConfirm(false);
+                                            setDeleteFiles(false);
+                                        }, disabled: deleting, children: SP_JSX.jsx("div", { style: { fontSize: "0.85em", padding: "2px" }, children: "Cancel" }) }) })] })) }), authDialog.show && (SP_JSX.jsx("div", { style: {
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 10000
+                        }, children: SP_JSX.jsxs("div", { style: {
+                                backgroundColor: '#1e2329',
+                                padding: '20px',
+                                borderRadius: '8px',
+                                maxWidth: '500px',
+                                width: '90%',
+                                maxHeight: '80vh',
+                                overflow: 'auto'
+                            }, children: [SP_JSX.jsxs("h2", { style: { marginTop: 0 }, children: [authDialog.store === 'epic' ? 'Epic Games' : authDialog.store === 'amazon' ? 'Amazon Games' : 'GOG', " Authentication"] }), SP_JSX.jsxs("div", { children: [SP_JSX.jsx("div", { style: { marginBottom: '15px', fontSize: '14px' }, children: authDialog.processing ? (SP_JSX.jsxs("div", { children: [SP_JSX.jsx("p", { children: "Please complete the login in the popup window." }), SP_JSX.jsx("p", { style: { fontSize: '0.9em', color: '#888', marginTop: '5px' }, children: "The window will close automatically after authentication." }), SP_JSX.jsxs("div", { style: { marginTop: '20px', textAlign: 'center' }, children: [SP_JSX.jsx("div", { style: { fontSize: '32px' }, children: "\u23F3" }), SP_JSX.jsx("p", { style: { fontSize: '12px', opacity: 0.7, marginTop: '10px' }, children: "Waiting for authentication..." })] })] })) : (SP_JSX.jsx("div", { children: SP_JSX.jsx("p", { children: "\u2713 Ready to authenticate" }) })) }), authDialog.error && (SP_JSX.jsxs("div", { style: {
+                                                marginBottom: '15px',
+                                                padding: '10px',
+                                                backgroundColor: '#5c1f1f',
+                                                borderRadius: '4px',
+                                                fontSize: '13px'
+                                            }, children: [authDialog.error, authDialog.error.includes('cross-origin') && (SP_JSX.jsx("p", { style: { fontSize: '0.8em', marginTop: '5px' }, children: "The popup closed before authentication could complete. Please try again." }))] })), SP_JSX.jsx("div", { style: { display: 'flex', gap: '10px' }, children: SP_JSX.jsx("button", { onClick: () => setAuthDialog({ show: false, store: null, url: '', code: '', processing: false, error: '', autoMode: false }), style: {
+                                                    flex: 1,
+                                                    padding: '10px',
+                                                    backgroundColor: '#3d4450',
+                                                    border: 'none',
+                                                    borderRadius: '4px',
+                                                    color: 'white',
+                                                    cursor: 'pointer'
+                                                }, children: authDialog.processing ? 'Cancel' : 'Close' }) })] })] }) }))] }))] }));
 };
 var index = definePlugin(() => {
     console.log("[Unifideck] Plugin loaded");
-    // Patch the library to add Unifideck tabs (All, Installed, Great on Deck, Steam, Epic, GOG)
+    // Patch the library to add Unifideck tabs (All, Installed, Great on Deck, Steam, Epic, GOG, Amazon)
     // This uses TabMaster's approach: intercept useMemo hook to inject custom tabs
     const libraryPatch = patchLibrary();
     console.log("[Unifideck] ✓ Library tabs patch registered");
@@ -2540,8 +2420,8 @@ var index = definePlugin(() => {
     console.log("[Unifideck] Background sync disabled (use manual sync button)");
     return {
         name: "UNIFIDECK",
-        icon: SP_REACT.createElement(FaGamepad, null),
-        content: SP_REACT.createElement(Content, null),
+        icon: SP_JSX.jsx(FaGamepad, {}),
+        content: SP_JSX.jsx(Content, {}),
         onDismount() {
             console.log("[Unifideck] Plugin unloading");
             // Remove CSS injection

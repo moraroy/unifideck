@@ -24,18 +24,19 @@ A Decky Loader plugin that brings together games from Steam, Epic Games Store, a
 - **One-Click Installation** - Install Epic and GOG games directly from Steam's interface
 - **Automatic Artwork** - Game covers, banners, and logos fetched automatically from SteamGridDB
 - **In-App Authentication** - Log into Epic and GOG stores without leaving Gaming Mode
-- **No Restart Required** - Installed games are playable immediately without restarting Steam
+- **No Restart Required** - Installed games are playable immediately without restarting Steam*
+
+*Still needs one time restart after libraries have been synced
 
 ## Screenshots
 
 ### Unified Game Library
 
-![20260104022735_1](https://github.com/user-attachments/assets/1d055022-06f1-475c-ace5-695155ff36da)
+![20260104022735_1](https://github.com/user-attachments/assets/208a9610-2b4f-4e1d-941f-33a152cc34d8)
 
 ### Game Details
 
-![20260104022821_1](https://github.com/user-attachments/assets/506cb4ce-d25d-42ba-a59e-1988fa012541)
-
+![20260104022821_1](https://github.com/user-attachments/assets/afc0922e-aace-4d47-925e-1bc7f1e48140)
 
 ## Prerequisites
 
@@ -46,7 +47,7 @@ That's it! All other tools and dependencies are bundled with the plugin.
 
 ## Installation
 
-1. Download the plugin ZIP file: https://github.com/mubaraknumann/UNIFIDECK/releases/latest/download/unifideck-plugin.zip
+1. Download the plugin ZIP file: https://github.com/user-attachments/files/24423959/unifideck-plugin-v0.2.0.zip
 2. Open **Quick Access Menu** (three dots button)
 3. Navigate to **Decky** → **Settings** (gear icon)
 4. Enable **Developer Mode** if not already enabled
@@ -58,7 +59,7 @@ That's it! All other tools and dependencies are bundled with the plugin.
 
 1. Open the **Quick Access Menu** and find **Unifideck**
 2. Connect your **Epic Games** and/or **GOG** accounts using the authenticate buttons
-3. Click **Sync Libraries** and wait for completion
+3. Click **Sync Libraries** and wait for completion. Restart Steam.
 
 Your games will now appear in your Steam library!
 
@@ -66,15 +67,17 @@ Your games will now appear in your Steam library!
 
 - The plugin creates custom tabs that replace the standard Great on Deck, All Games and Installed tabs so standard filtering and sorting will not work (for now).
 - Some GOG games come as multiple download files - these are handled automatically but may take longer to install
-- A few Epic multiplayer games need extra setup for online features (currently not supported)
+- A few Epic multiplayer games need extra setup for online features (work in progress)
 - Not all games have artwork available - some may show default images. Suggest using SteamGrid DB.
+- Cloud Saves do not work
+- Compatibility issues with Tabmaster (WIP)
 
 ## Troubleshooting
 
 ### Games Don't Appear After Syncing
 
-1. Restart Steam completely (exit and relaunch, not just return to game mode)
-2. Re-run sync from the Quick Access Menu
+1. Restart Steam/Steam Deck
+2. Re-run sync/force sync from the Quick Access Menu
 3. Check that your accounts are still connected
 
 ### Can't Install a Game
@@ -135,7 +138,7 @@ The following Decky plugins were studied as reference during development:
 - **[SteamGridDB Decky](https://github.com/SteamGridDB/decky-steamgriddb)** - For SteamGridDB API integration and artwork downloading
 - **[ProtonDB Decky](https://github.com/OMGDuke/protondb-decky)** - For game compatibility rating integration patterns
 - **[HeroicGamesLauncher](https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher)** - For Epic and GOG launcher integration approaches
-- **[Junkstore](https://github.com/Tormak9970/decky-junkstore)** - For non-Steam game management and shortcuts.vdf manipulation
+- **[Junkstore](https://github.com/ebenbruyns/junkstore)** - For non-Steam game management and authentication references
 
 ### Special Thanks
 - **Valve** - For the Steam Deck platform and Steam OS
