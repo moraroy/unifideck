@@ -37,5 +37,33 @@ package-lock.json
 pnpm-lock.yaml
 Thumbs.db
 
+# Test and debug files
+test_*.py
+debug_*.py
+verify_*.py
+read_user_json.py
+test_cloud_saves/
+
+# Binary executables and tools
+*.exe
+cabextract
+gogdl
+winetricks
+bin/game_fixes.py
+bin/winetricks_installer.py
+bin/prefetch_winetricks.py
+
+# Backup files
+*.backup
+
+# Build scripts
+build-plugin.sh
+
+# Downloaded source directories
+HeroicGamesLauncher-main/
+junkstore-main/
+ludusavi-master/
+umu-launcher-main/
+
 dist/index.js
 dist/index.js.map

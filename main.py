@@ -1107,7 +1107,7 @@ class ShortcutsManager:
             logger.error(f"Error adding game to shortcuts: {e}")
             return False
 
-    async def add_games_batch(self, games: List[Game], launcher_script: str) -> Dict[str, Any]:
+    async def add_games_batch(self, games: List[Game], launcher_script: str, valid_stores: List[str] = None) -> Dict[str, Any]:
         """
         Add multiple games in a single write operation with smart update logic.
 
@@ -1133,7 +1133,12 @@ class ShortcutsManager:
                 launch = shortcut.get('LaunchOptions', '')
 
                 # Only touch Unifideck shortcuts (epic: or gog:)
-                if launch.startswith('epic:') or launch.startswith('gog:'):
+                if launch.startswith('epic:') or launch.startswith('gog:') or launch.startswith('amazon:'):
+                    # Check if we should manage this store
+                    store_prefix = launch.split(':', 1)[0]
+                    if valid_stores is not None and store_prefix not in valid_stores:
+                        continue
+
                     # If this game no longer exists in current library, it's orphaned
                     if launch not in current_launch_options:
                         logger.debug(f"Removing orphaned shortcut: {shortcut.get('AppName')} ({launch})")
@@ -1253,7 +1258,7 @@ class ShortcutsManager:
             traceback.print_exc()
             return {'added': 0, 'skipped': 0, 'removed': 0, 'reclaimed': 0, 'error': str(e)}
 
-    async def force_update_games_batch(self, games: List[Game], launcher_script: str) -> Dict[str, Any]:
+    async def force_update_games_batch(self, games: List[Game], launcher_script: str, valid_stores: List[str] = None) -> Dict[str, Any]:
         """
         Force update all games - rewrites existing shortcuts with fresh data.
         
@@ -1287,7 +1292,12 @@ class ShortcutsManager:
                 exe_path_current = shortcut.get('Exe', '').strip('"')
 
                 # Only touch Unifideck shortcuts (epic: or gog:)
-                if launch.startswith('epic:') or launch.startswith('gog:'):
+                if launch.startswith('epic:') or launch.startswith('gog:') or launch.startswith('amazon:'):
+                    # Check if we should manage this store
+                    store_prefix = launch.split(':', 1)[0]
+                    if valid_stores is not None and store_prefix not in valid_stores:
+                        continue
+
                     if launch not in current_launch_options:
                         # Orphaned - game no longer in library
                         logger.debug(f"Removing orphaned shortcut: {shortcut.get('AppName')} ({launch})")
@@ -1797,7 +1807,7 @@ class EpicConnector:
 
         except Exception as e:
             logger.error(f"Error fetching Epic library: {e}")
-            return []
+            return None
 
     async def get_installed(self) -> Dict[str, Any]:
         """
@@ -2253,13 +2263,13 @@ class AmazonConnector:
 
         except Exception as e:
             logger.error(f"[Amazon] Error syncing library: {e}")
-            return False
+            return None
 
     async def get_library(self) -> List[Game]:
         """Get Amazon Games library via nile"""
         if not self.nile_bin:
             logger.warning("[Amazon] Nile CLI not found")
-            return []
+            return None
 
         try:
             # First sync library to get latest
@@ -2878,7 +2888,7 @@ class GOGAPIClient:
 
         except Exception as e:
             logger.error(f"Error fetching GOG library: {e}")
-            return []
+            return None
 
     async def get_installed(self) -> List[str]:
         """
@@ -4553,6 +4563,28 @@ class Plugin:
                 gog_games = await self.gog.get_library()
                 amazon_games = await self.amazon.get_library()
 
+                # Robustly handle API failures (None returns)
+                valid_stores = []
+                all_games = []
+
+                if epic_games is not None:
+                    valid_stores.append('epic')
+                    all_games.extend(epic_games)
+                else:
+                    epic_games = [] # For iteration below
+
+                if gog_games is not None:
+                     valid_stores.append('gog')
+                     all_games.extend(gog_games)
+                else:
+                     gog_games = []
+
+                if amazon_games is not None:
+                     valid_stores.append('amazon')
+                     all_games.extend(amazon_games)
+                else:
+                     amazon_games = []
+
                 # Check for cancellation
                 if self._cancel_sync:
                     logger.warning("Sync cancelled by user after fetching libraries")
@@ -4566,10 +4598,9 @@ class Plugin:
                         'gog_count': 0,
                         'amazon_count': 0,
                         'added_count': 0,
+                        'updated_count': 0,
                         'artwork_count': 0
                     }
-
-                all_games = epic_games + gog_games + amazon_games
                 self.sync_progress.total_games = len(all_games)
                 self.sync_progress.synced_games = 0
 
@@ -4758,7 +4789,8 @@ class Plugin:
                 self.sync_progress.status = "syncing"
                 self.sync_progress.current_game = "Saving shortcuts..."
                 
-                batch_result = await self.shortcuts_manager.add_games_batch(all_games, launcher_script)
+                # Use valid_stores to prevent deleting shortcuts for stores that failed to sync
+                batch_result = await self.shortcuts_manager.add_games_batch(all_games, launcher_script, valid_stores=valid_stores)
                 added_count = batch_result.get('added', 0)
                 
                 if batch_result.get('error'):
@@ -4833,24 +4865,27 @@ class Plugin:
                 gog_games = await self.gog.get_library()
                 amazon_games = await self.amazon.get_library()
 
-                # Check for cancellation
-                if self._cancel_sync:
-                    logger.warning("Force sync cancelled by user after fetching libraries")
-                    self.sync_progress.status = "cancelled"
-                    self.sync_progress.current_game = "Force sync cancelled by user"
-                    return {
-                        'success': False,
-                        'error': 'Sync cancelled by user',
-                        'cancelled': True,
-                        'epic_count': 0,
-                        'gog_count': 0,
-                        'amazon_count': 0,
-                        'added_count': 0,
-                        'updated_count': 0,
-                        'artwork_count': 0
-                    }
+                # Robustly handle API failures (None returns)
+                valid_stores = []
+                all_games = []
 
-                all_games = epic_games + gog_games + amazon_games
+                if epic_games is not None:
+                    valid_stores.append('epic')
+                    all_games.extend(epic_games)
+                else:
+                    epic_games = []
+
+                if gog_games is not None:
+                    valid_stores.append('gog')
+                    all_games.extend(gog_games)
+                else:
+                    gog_games = []
+
+                if amazon_games is not None:
+                    valid_stores.append('amazon')
+                    all_games.extend(amazon_games)
+                else:
+                    amazon_games = []
                 self.sync_progress.total_games = len(all_games)
                 self.sync_progress.synced_games = 0
 
@@ -4906,7 +4941,7 @@ class Plugin:
                 self.sync_progress.current_game = "Force sync: Rewriting shortcuts..."
 
                 # Force update all games - rewrite existing shortcuts
-                batch_result = await self.shortcuts_manager.force_update_games_batch(all_games, launcher_script)
+                batch_result = await self.shortcuts_manager.force_update_games_batch(all_games, launcher_script, valid_stores=valid_stores)
                 added_count = batch_result.get('added', 0)
                 updated_count = batch_result.get('updated', 0)
 
@@ -5059,25 +5094,26 @@ class Plugin:
                 if force_result.get('error'):
                     raise Exception(force_result['error'])
 
-                # Update Proton compatibility for all installed Windows games
+                # CLEAR Proton compatibility for all Unifideck games
+                # The unifideck-launcher script handles Proton internally via umu-run
+                # We DON'T want Steam to wrap our launcher in Proton (causes Python path issues)
                 self.sync_progress.status = "proton_setup"
-                self.sync_progress.current_game = "Force sync: Updating Proton compatibility..."
-                proton_updated = 0
+                self.sync_progress.current_game = "Force sync: Clearing Proton compatibility (launcher manages internally)..."
+                proton_cleared = 0
                 
                 shortcuts_data = await self.shortcuts_manager.read_shortcuts()
                 for idx, shortcut in shortcuts_data.get('shortcuts', {}).items():
                     launch_opts = shortcut.get('LaunchOptions', '')
-                    exe_path = shortcut.get('Exe', '').strip('"')
                     app_id = shortcut.get('appid')
                     
-                    # Check if this is a Unifideck game with a Windows executable
-                    if (launch_opts.startswith('epic:') or launch_opts.startswith('gog:')) or \
-                       (not launch_opts and exe_path.lower().endswith('.exe')):
-                        if exe_path.lower().endswith('.exe') and app_id:
-                            await self.shortcuts_manager._set_proton_compatibility(app_id, "proton_experimental")
-                            proton_updated += 1
+                    # Check if this is a Unifideck game (has store:game_id format in LaunchOptions)
+                    if ':' in launch_opts and app_id:
+                        store_prefix = launch_opts.split(':')[0]
+                        if store_prefix in ('epic', 'gog', 'amazon'):
+                            await self.shortcuts_manager._clear_proton_compatibility(app_id)
+                            proton_cleared += 1
                 
-                logger.info(f"Updated Proton compatibility for {proton_updated} games")
+                logger.info(f"Cleared Proton compatibility for {proton_cleared} games (launcher manages Proton via umu-run)")
 
                 # Complete
                 self.sync_progress.status = "complete"
