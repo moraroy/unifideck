@@ -6429,7 +6429,7 @@ class Plugin:
                 
                 for idx, shortcut in shortcuts.get('shortcuts', {}).items():
                     launch_opts = shortcut.get('LaunchOptions', '')
-                    if launch_opts.startswith('epic:') or launch_opts.startswith('gog:'):
+                    if launch_opts.startswith('epic:') or launch_opts.startswith('gog:') or launch_opts.startswith('amazon:'):
                         unifideck_shortcuts[idx] = shortcut
                     else:
                         original_shortcuts[idx] = shortcut
