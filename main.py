@@ -20,6 +20,9 @@ if DECKY_PLUGIN_DIR:
 # Import VDF utilities
 from vdf_utils import load_shortcuts_vdf, save_shortcuts_vdf
 
+# Import Steam user detection utilities
+from steam_user_utils import get_logged_in_steam_user
+
 # Import SteamGridDB client
 try:
     from steamgriddb_client import SteamGridDBClient
@@ -723,7 +726,11 @@ class ShortcutsManager:
         return None
 
     def _find_shortcuts_vdf(self) -> Optional[str]:
-        """Find shortcuts.vdf file - use most recently active user"""
+        """Find shortcuts.vdf file for the logged-in Steam user.
+        
+        Uses loginusers.vdf to find the user with MostRecent=1, falling
+        back to mtime-based detection while explicitly excluding user 0.
+        """
         if not self.steam_path:
             return None
 
@@ -731,23 +738,20 @@ class ShortcutsManager:
         if not os.path.exists(userdata_path):
             return None
 
-        # Find user directories (sorted by most recent activity)
-        user_dirs = []
-        for d in os.listdir(userdata_path):
-            if d.isdigit():
-                dir_path = os.path.join(userdata_path, d)
-                mtime = os.path.getmtime(dir_path)
-                user_dirs.append((d, mtime))
-
-        if not user_dirs:
+        # Use the new robust user detection utility
+        active_user = get_logged_in_steam_user(self.steam_path)
+        
+        if not active_user:
+            logger.error("[ShortcutsManager] Could not determine logged-in Steam user")
+            return None
+        
+        # Safety check: never use user 0
+        if active_user == '0':
+            logger.error("[ShortcutsManager] User 0 detected - this is a meta-directory, not a real user!")
             return None
 
-        # Use most recently active user (highest mtime)
-        user_dirs.sort(key=lambda x: x[1], reverse=True)
-        active_user = user_dirs[0][0]
-
         shortcuts_path = os.path.join(userdata_path, active_user, "config", "shortcuts.vdf")
-        logger.info(f"Using shortcuts.vdf for user {active_user}: {shortcuts_path}")
+        logger.info(f"[ShortcutsManager] Using shortcuts.vdf for user {active_user}: {shortcuts_path}")
 
         return shortcuts_path
 
