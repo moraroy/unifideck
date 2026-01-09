@@ -21,7 +21,9 @@ A Decky Loader plugin that brings together games from Steam, Epic Games Store, a
 ## Features
 
 - **Unified Game Library** - Epic Games, GOG and Amazon games appear directly in your Steam library*
+- **Great On Deck for All** - Great on Deck tab will show all games in your connected libraries are platinum rated or verified by Steam.
 - **One-Click Installation** - Install Epic and GOG games directly from Steam's interface
+- **Cloud Saves** - Currenly available for Epic and GOG. Not all games supported.
 - **Automatic Artwork** - Game covers, banners, and logos fetched automatically from SteamGridDB
 - **In-App Authentication** - Log into Epic and GOG stores without leaving Gaming Mode
 - **No Restart Required** - Installed games are playable immediately without restarting Steam**
