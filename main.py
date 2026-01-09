@@ -164,6 +164,41 @@ class CDPOAuthMonitor:
             logger.error(f"[CDP] Error closing page: {e}")
             return False
 
+    async def refresh_page_by_url(self, url_pattern: str):
+        """Refresh/reload a browser page matching URL pattern via CDP"""
+        import urllib.request
+
+        try:
+            # Get current CEF pages
+            with urllib.request.urlopen(self.cef_url, timeout=2) as response:
+                pages = json.loads(response.read().decode())
+
+            # Find page matching URL pattern
+            for page in pages:
+                if url_pattern in page.get('url', ''):
+                    ws_url = page.get('webSocketDebuggerUrl')
+
+                    if ws_url:
+                        logger.info(f"[CDP] Refreshing page via CDP: {page.get('url', '')[:80]}...")
+
+                        import websockets
+
+                        async with websockets.connect(ws_url, ping_interval=None) as websocket:
+                            await websocket.send(json.dumps({
+                                'id': 1,
+                                'method': 'Page.reload',
+                                'params': {'ignoreCache': True}
+                            }))
+                            logger.info(f"[CDP] ✓ Page refresh command sent")
+                            return True
+
+            logger.warning(f"[CDP] No page found matching: {url_pattern}")
+            return False
+
+        except Exception as e:
+            logger.error(f"[CDP] Error refreshing page: {e}")
+            return False
+
     async def clear_cookies_for_domain(self, domain: str):
         """Clear browser cookies for specific domain via CDP"""
         import urllib.request
@@ -1902,9 +1937,9 @@ class EpicConnector:
                 result = await self.complete_auth(code)
                 if result['success']:
                     logger.info("[EPIC] ✓ Authentication completed automatically!")
-
-                    # Close the auth popup window
-                    await monitor.close_page_by_url('epicgames.com')
+                    # DON'T force-close the auth page - this disrupts Steam's browser state
+                    # and can cause other auth popups to hang. User can close manually.
+                    # await monitor.close_page_by_url('epicgames.com')
 
                     # Auto-sync library after successful auth
                     if self.plugin_instance:
@@ -2913,9 +2948,9 @@ class GOGAPIClient:
                 result = await self.complete_auth(code)
                 if result['success']:
                     logger.info("[GOG] ✓ Authentication completed automatically!")
-
-                    # Close the auth popup window
-                    await monitor.close_page_by_url('gog.com')
+                    # DON'T force-close the auth page - this disrupts Steam's browser state
+                    # and can cause other auth popups to hang. User can close manually.
+                    # await monitor.close_page_by_url('gog.com')
 
                     # Auto-sync library after successful auth
                     if self.plugin_instance:
