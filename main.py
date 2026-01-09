@@ -3869,6 +3869,18 @@ class GOGAPIClient:
                                 os.remove(dest_path)
                             resume_from = 0
                             continue  # Retry from beginning
+                        elif response.status == 401:
+                            # Token expired - refresh and retry
+                            logger.warning(f"[GOG] Token expired (401), refreshing...")
+                            if await self._refresh_access_token():
+                                logger.info(f"[GOG] Token refreshed successfully, retrying download")
+                                last_error = "Token refreshed, retrying"
+                                # Don't count this as a failed attempt - just continue to retry
+                                continue
+                            else:
+                                logger.error(f"[GOG] Failed to refresh token")
+                                last_error = "Token refresh failed"
+                                raise aiohttp.ClientError("Token refresh failed")
                         else:
                             logger.error(f"[GOG] Download failed with status {response.status}")
                             last_error = f"HTTP {response.status}"
