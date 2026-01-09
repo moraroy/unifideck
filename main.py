@@ -36,6 +36,9 @@ from download_manager import get_download_queue, DownloadQueue
 # Import Cloud Save Manager
 from cloud_save_manager import CloudSaveManager
 
+# Import resilient launch options parser
+from launch_options_parser import extract_store_id, is_unifideck_shortcut, get_full_id, get_store_prefix
+
 # Use Decky's logger for proper integration
 logger = decky.logger
 
@@ -1342,7 +1345,7 @@ class ShortcutsManager:
             
             for s in shortcuts.values():
                 opts = s.get('LaunchOptions', '')
-                if target_launch_options in opts:
+                if get_full_id(opts) == target_launch_options:
                     target_shortcut = s
                     break
             
@@ -1426,7 +1429,7 @@ class ShortcutsManager:
             # Check if game already exists (duplicate detection)
             target_launch_options = f'{game.store}:{game.id}'
             for idx, shortcut in shortcuts.get("shortcuts", {}).items():
-                if shortcut.get('LaunchOptions') == target_launch_options:
+                if get_full_id(shortcut.get('LaunchOptions', '')) == target_launch_options:
                     logger.info(f"Game {game.title} already in shortcuts, skipping")
                     return True  # Already exists, not an error
 
@@ -1495,14 +1498,15 @@ class ShortcutsManager:
                 launch = shortcut.get('LaunchOptions', '')
 
                 # Only touch Unifideck shortcuts (epic: or gog:)
-                if launch.startswith('epic:') or launch.startswith('gog:') or launch.startswith('amazon:'):
+                if is_unifideck_shortcut(launch):
                     # Check if we should manage this store
-                    store_prefix = launch.split(':', 1)[0]
+                    store_prefix = get_store_prefix(launch)
                     if valid_stores is not None and store_prefix not in valid_stores:
                         continue
 
                     # If this game no longer exists in current library, it's orphaned
-                    if launch not in current_launch_options:
+                    full_id = get_full_id(launch)
+                    if full_id not in current_launch_options:
                         logger.debug(f"Removing orphaned shortcut: {shortcut.get('AppName')} ({launch})")
                         del shortcuts["shortcuts"][idx]
                         removed_count += 1
@@ -1654,25 +1658,26 @@ class ShortcutsManager:
                 exe_path_current = shortcut.get('Exe', '').strip('"')
 
                 # Only touch Unifideck shortcuts (epic: or gog:)
-                if launch.startswith('epic:') or launch.startswith('gog:') or launch.startswith('amazon:'):
+                if is_unifideck_shortcut(launch):
                     # Check if we should manage this store
-                    store_prefix = launch.split(':', 1)[0]
+                    store_prefix = get_store_prefix(launch)
                     if valid_stores is not None and store_prefix not in valid_stores:
                         continue
 
-                    if launch not in current_launch_options:
+                    full_id = get_full_id(launch)
+                    if full_id not in current_launch_options:
                         # Orphaned - game no longer in library
                         logger.debug(f"Removing orphaned shortcut: {shortcut.get('AppName')} ({launch})")
                         to_remove.append(idx)
                         removed_count += 1
                     else:
                         # Existing game - update it with current data
-                        game = games_by_launch_opts.get(launch)
+                        game = games_by_launch_opts.get(full_id)
                         if game:
                             # Update shortcut fields
                             shortcut['AppName'] = game.title
                             shortcut['exe'] = launcher_script
-                            shortcut['LaunchOptions'] = launch
+                            shortcut['LaunchOptions'] = full_id  # Normalize to canonical form
                             
                             # Update tags
                             store_tag = game.store.title()
@@ -1812,7 +1817,7 @@ class ShortcutsManager:
             # Find shortcut by LaunchOptions (reliable) or AppName (fallback)
             target_shortcut = None
             for idx, s in shortcuts.get("shortcuts", {}).items():
-                if target_launch_options in s.get('LaunchOptions', ''):
+                if get_full_id(s.get('LaunchOptions', '')) == target_launch_options:
                     target_shortcut = s
                     break
             
@@ -1916,7 +1921,7 @@ class ShortcutsManager:
 
             target_launch_options = f'{store}:{game_id}'
             for idx, shortcut in list(shortcuts.get("shortcuts", {}).items()):
-                if shortcut.get('LaunchOptions') == target_launch_options:
+                if get_full_id(shortcut.get('LaunchOptions', '')) == target_launch_options:
                     del shortcuts["shortcuts"][idx]
                     logger.info(f"Removed {game_id} from shortcuts")
                     return await self.write_shortcuts(shortcuts)
@@ -5803,11 +5808,9 @@ class Plugin:
                     app_id = shortcut.get('appid')
                     
                     # Check if this is a Unifideck game (has store:game_id format in LaunchOptions)
-                    if ':' in launch_opts and app_id:
-                        store_prefix = launch_opts.split(':')[0]
-                        if store_prefix in ('epic', 'gog', 'amazon'):
-                            await self.shortcuts_manager._clear_proton_compatibility(app_id)
-                            proton_cleared += 1
+                    if is_unifideck_shortcut(launch_opts) and app_id:
+                        await self.shortcuts_manager._clear_proton_compatibility(app_id)
+                        proton_cleared += 1
                 
                 logger.info(f"Cleared Proton compatibility for {proton_cleared} games (launcher manages Proton via umu-run)")
 
@@ -6143,12 +6146,13 @@ class Plugin:
             for idx, shortcut in shortcuts.get("shortcuts", {}).items():
                 shortcut_app_id = shortcut.get('appid')
                 if shortcut_app_id == app_id_signed:
-                    # Parse LaunchOptions to get store and game_id
+                    # Parse LaunchOptions to get store and game_id (resilient to extra params)
                     launch_options = shortcut.get('LaunchOptions', '')
-                    if ':' not in launch_options:
-                        return {'error': 'Invalid launch options format'}
+                    result = extract_store_id(launch_options)
+                    if not result:
+                        return {'error': 'No valid store:game_id found in launch options'}
 
-                    store, game_id = launch_options.split(':', 1)
+                    store, game_id = result
 
                     # Check installation status
                     # Priority 1: Check games.map (fast, authoritative for Unifideck-installed games)
@@ -6918,7 +6922,7 @@ class Plugin:
                 
                 for idx, shortcut in shortcuts.get('shortcuts', {}).items():
                     launch_opts = shortcut.get('LaunchOptions', '')
-                    if launch_opts.startswith('epic:') or launch_opts.startswith('gog:') or launch_opts.startswith('amazon:'):
+                    if is_unifideck_shortcut(launch_opts):
                         unifideck_shortcuts[idx] = shortcut
                     else:
                         original_shortcuts[idx] = shortcut
