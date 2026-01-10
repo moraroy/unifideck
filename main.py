@@ -3800,9 +3800,18 @@ class GOGAPIClient:
                 logger.info(f"[GOG] Download URL: {installer_url}")
                 
                 # Create a wrapper callback that calculates weighted overall progress
+                # Track last callback time to throttle updates and reduce ETA jitter
+                last_weighted_callback_time = [0.0]  # Use list for nonlocal access
+                
                 async def weighted_progress_callback(progress_data, part_idx=index, part_expected=expected_size):
                     nonlocal cumulative_downloaded
                     if progress_callback:
+                        # Throttle callbacks to max once per second
+                        now = time.time()
+                        if now - last_weighted_callback_time[0] < 1.0:
+                            return  # Skip this update
+                        last_weighted_callback_time[0] = now
+                        
                         # Calculate overall progress: completed parts + current part progress
                         completed_bytes = sum(part_sizes[:part_idx])  # Bytes from completed parts
                         current_part_bytes = progress_data.get('downloaded_bytes', 0)
@@ -3814,12 +3823,20 @@ class GOGAPIClient:
                             # Fallback: use per-part progress
                             overall_percent = progress_data.get('progress_percent', 0)
                         
+                        # Calculate ETA based on TOTAL remaining bytes, not just current part
+                        speed_bps = progress_data.get('speed_bps', 0)
+                        total_remaining = total_bytes_all_parts - overall_downloaded
+                        if speed_bps > 0:
+                            total_eta_seconds = int(total_remaining / speed_bps)
+                        else:
+                            total_eta_seconds = 0
+                        
                         await progress_callback({
                             'progress_percent': overall_percent,
                             'downloaded_bytes': overall_downloaded,
                             'total_bytes': total_bytes_all_parts,
-                            'speed_bps': progress_data.get('speed_bps', 0),
-                            'eta_seconds': progress_data.get('eta_seconds', 0),
+                            'speed_bps': speed_bps,
+                            'eta_seconds': total_eta_seconds,  # Now based on total remaining
                             'current_part': part_idx + 1,
                             'total_parts': len(installers_list)
                         })
@@ -3858,6 +3875,13 @@ class GOGAPIClient:
             # Detect if it's a shell script by content, not just extension
             is_linux_installer = installer_platform == 'linux'
             
+            # ** PHASE UPDATE: Notify that extraction is starting **
+            if progress_callback:
+                await progress_callback({
+                    'phase': 'extracting',
+                    'phase_message': 'Extracting game files... This may take several minutes.'
+                })
+            
             # If platform is "linux" but file might not have .sh extension, verify by content
             if is_linux_installer or self._is_shell_script(main_installer_path):
                 os.chmod(main_installer_path, 0o755)
@@ -3881,6 +3905,13 @@ class GOGAPIClient:
                     'install_path': install_path
                 }
 
+            # ** PHASE UPDATE: Notify that verification is starting **
+            if progress_callback:
+                await progress_callback({
+                    'phase': 'verifying',
+                    'phase_message': 'Verifying installation...'
+                })
+
             # 7. Find game executable (only if extraction succeeded)
             game_exe = self._find_game_executable(install_path)
             if game_exe:
@@ -3893,6 +3924,13 @@ class GOGAPIClient:
                     logger.info(f"[GOG] Wrote marker file for ID {game_id}")
                 except Exception as e:
                     logger.warning(f"[GOG] Failed to write marker file: {e}")
+
+                # ** PHASE UPDATE: Complete **
+                if progress_callback:
+                    await progress_callback({
+                        'phase': 'complete',
+                        'phase_message': 'Installation complete!'
+                    })
 
                 logger.info(f"[GOG] Game installed successfully to {install_path}")
                 return {
@@ -4713,24 +4751,49 @@ class GOGAPIClient:
             logger.info(f"[GOG] Using bundled innoextract: {innoextract_bin}")
             logger.info(f"[GOG] Running: innoextract -e -d {install_path} {installer_path}")
 
-            # Extract installer
+            # Extract installer with streaming output for progress logging
             # -e: extract files only (no GUI)
             # -d: output directory
             # -g: extract GOG.com specific archives (bonus content, etc.)
+            # --progress: show progress
             proc = await asyncio.create_subprocess_exec(
                 innoextract_bin,
                 '-e',  # Extract mode
                 '-g',  # Extract GOG.com specific archives
+                '--progress',  # Show progress
                 '-d', install_path,
                 installer_path,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.STDOUT  # Combine stderr into stdout
             )
 
-            stdout, stderr = await proc.communicate()
+            # Stream output and log periodically
+            files_extracted = 0
+            last_log_time = time.time()
+            output_buffer = ""
+            
+            while True:
+                line = await proc.stdout.readline()
+                if not line:
+                    break
+                
+                decoded_line = line.decode(errors='replace').strip()
+                output_buffer += decoded_line + "\n"
+                
+                # Count extracted files (innoextract outputs "Extracting <filename>")
+                if decoded_line.startswith('Extracting ') or 'extracting' in decoded_line.lower():
+                    files_extracted += 1
+                
+                # Log progress every 10 seconds
+                now = time.time()
+                if now - last_log_time >= 10:
+                    logger.info(f"[GOG Extraction] Extracted {files_extracted} files...")
+                    last_log_time = now
+            
+            await proc.wait()
 
             if proc.returncode == 0:
-                logger.info(f"[GOG] Windows installer extraction successful")
+                logger.info(f"[GOG] Windows installer extraction successful: {files_extracted} files extracted")
 
                 # innoextract creates an "app" subdirectory, move contents up
                 app_dir = os.path.join(install_path, 'app')
@@ -4745,8 +4808,10 @@ class GOGAPIClient:
 
                 return True
             else:
-                error_msg = stderr.decode() if stderr else 'Unknown error'
-                logger.error(f"[GOG] innoextract failed: {error_msg}")
+                logger.error(f"[GOG] innoextract failed with code {proc.returncode}")
+                # Log last 500 chars of output for debugging
+                if output_buffer:
+                    logger.error(f"[GOG] innoextract output: {output_buffer[-500:]}")
                 return False
 
         except Exception as e:
