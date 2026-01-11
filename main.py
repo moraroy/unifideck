@@ -361,10 +361,8 @@ STEAM_APPID_CACHE_FILE = "steam_appid_cache.json"
 
 
 def get_steam_appid_cache_path() -> Path:
-    """Get path to steam_app_id cache file"""
-    if DECKY_PLUGIN_DIR:
-        return Path(DECKY_PLUGIN_DIR) / STEAM_APPID_CACHE_FILE
-    return Path.home() / ".unifideck" / STEAM_APPID_CACHE_FILE
+    """Get path to steam_app_id cache file (in user data, not plugin dir)"""
+    return Path.home() / ".local" / "share" / "unifideck" / STEAM_APPID_CACHE_FILE
 
 
 def load_steam_appid_cache() -> Dict[int, int]:
@@ -509,6 +507,263 @@ def get_cached_game_size(store: str, game_id: str) -> Optional[int]:
     cache_key = f"{store}:{game_id}"
     entry = cache.get(cache_key)
     return entry.get('size_bytes') if entry else None
+
+
+# Compatibility Cache - stores ProtonDB tier and Steam Deck status for games
+# Pre-populated during sync for fast "Great on Deck" filtering
+COMPAT_CACHE_FILE = "compat_cache.json"
+
+# ProtonDB tier types
+PROTONDB_TIERS = ['platinum', 'gold', 'silver', 'bronze', 'borked', 'pending', 'native']
+
+# Steam Deck compatibility categories from Steam API
+DECK_CATEGORIES = {
+    1: 'unknown',
+    2: 'unsupported',
+    3: 'playable',
+    4: 'verified'
+}
+
+# User-Agent to avoid being blocked by APIs
+COMPAT_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+
+
+def get_compat_cache_path() -> Path:
+    """Get path to compatibility cache file"""
+    return Path.home() / ".local" / "share" / "unifideck" / COMPAT_CACHE_FILE
+
+
+def load_compat_cache() -> Dict[str, Dict]:
+    """Load compatibility cache. Returns {normalized_title: {tier, deckVerified, steamAppId, timestamp}}"""
+    cache_path = get_compat_cache_path()
+    try:
+        if cache_path.exists():
+            with open(cache_path, 'r') as f:
+                return json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading compat cache: {e}")
+    return {}
+
+
+def save_compat_cache(cache: Dict[str, Dict]) -> bool:
+    """Save compatibility cache to file"""
+    cache_path = get_compat_cache_path()
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(cache_path, 'w') as f:
+            json.dump(cache, f, indent=2)
+        logger.debug(f"Saved {len(cache)} entries to compat cache")
+        return True
+    except Exception as e:
+        logger.error(f"Error saving compat cache: {e}")
+        return False
+
+
+class BackgroundCompatFetcher:
+    """Background service to fetch ProtonDB/Deck Verified data asynchronously.
+    
+    - Runs in background (fire-and-forget from sync)
+    - Searches Steam Store by title to get AppID
+    - Fetches ProtonDB tier and Steam Deck status in parallel
+    - Persists to compat_cache.json (survives plugin restarts)
+    """
+    
+    def __init__(self):
+        self._running = False
+        self._task = None
+        self._pending_titles = []  # List of game titles to fetch
+    
+    def queue_games(self, games: List):
+        """Queue games for background compat fetching.
+        
+        Args:
+            games: List of Game objects with 'title' and 'store' attributes
+        """
+        cache = load_compat_cache()
+        
+        for game in games:
+            # Only queue non-Steam games (Epic, GOG, Amazon) that aren't cached
+            if hasattr(game, 'store') and game.store in ('epic', 'gog', 'amazon'):
+                if hasattr(game, 'title') and game.title:
+                    normalized = game.title.lower().strip()
+                    if normalized not in cache:
+                        self._pending_titles.append(game.title)
+        
+        # Deduplicate
+        self._pending_titles = list(set(self._pending_titles))
+        logger.info(f"[CompatService] Queued {len(self._pending_titles)} games for compat fetching (from {len(games)} total candidates)")
+        if not self._pending_titles and len(games) > 0:
+             logger.warning("[CompatService] No games queued! Check if games have valid titles/stores or are already cached.")
+    
+    def start(self):
+        """Start background fetching (non-blocking)"""
+        if self._running:
+            logger.debug("[CompatService] Already running")
+            return
+        
+        if not self._pending_titles:
+            logger.debug("[CompatService] No pending games, not starting")
+            return
+        
+        logger.info(f"[CompatService] Starting background fetch for {len(self._pending_titles)} games")
+        self._running = True
+        self._task = asyncio.create_task(self._fetch_all())
+    
+    def stop(self):
+        """Stop background fetching"""
+        if self._task and not self._task.done():
+            self._task.cancel()
+        self._running = False
+        logger.info("[CompatService] Stopped")
+    
+    async def _search_steam_store(self, session, title: str) -> Optional[Dict]:
+        """Search Steam Store for a game by title."""
+        try:
+            url = f"https://store.steampowered.com/api/storesearch/?term={title}&cc=US"
+            headers = {'User-Agent': COMPAT_USER_AGENT}
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    items = data.get('items', [])
+                    if items:
+                        # Try exact match first
+                        normalized_title = title.lower().strip()
+                        for item in items:
+                            if item.get('name', '').lower().strip() == normalized_title:
+                                return {"appId": item['id'], "name": item['name']}
+                        # Fall back to first result
+                        return {"appId": items[0]['id'], "name": items[0]['name']}
+        except asyncio.TimeoutError:
+            logger.debug(f"[CompatService] Steam Store timeout: {title}")
+        except Exception as e:
+            logger.debug(f"[CompatService] Steam Store error for '{title}': {e}")
+        return None
+    
+    async def _fetch_protondb(self, session, appid: int) -> Optional[str]:
+        """Fetch ProtonDB rating for a Steam AppID."""
+        try:
+            url = f"https://www.protondb.com/api/v1/reports/summaries/{appid}.json"
+            headers = {'User-Agent': COMPAT_USER_AGENT}
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    tier = data.get('tier')
+                    if tier in PROTONDB_TIERS:
+                        return tier
+        except asyncio.TimeoutError:
+            logger.debug(f"[CompatService] ProtonDB timeout for appid {appid}")
+        except Exception as e:
+            logger.debug(f"[CompatService] ProtonDB error for appid {appid}: {e}")
+        return None
+    
+    async def _fetch_deck_verified(self, session, appid: int) -> str:
+        """Fetch Steam Deck compatibility status."""
+        try:
+            url = f"https://store.steampowered.com/saleaction/ajaxgetdeckappcompatibilityreport?nAppID={appid}"
+            headers = {'User-Agent': COMPAT_USER_AGENT}
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    category = data.get('results', {}).get('resolved_category', 1)
+                    return DECK_CATEGORIES.get(category, 'unknown')
+        except Exception as e:
+            logger.debug(f"[CompatService] Deck Verified error for appid {appid}: {e}")
+        return 'unknown'
+    
+    async def _get_compat_for_title(self, session, title: str):
+        """Get full compatibility info for a game title."""
+        normalized = title.lower().strip()
+        
+        # Step 1: Search Steam Store for AppID
+        search_result = await self._search_steam_store(session, title)
+        if not search_result:
+            return (normalized, {
+                "tier": None,
+                "deckVerified": "unknown",
+                "steamAppId": None,
+                "timestamp": int(time.time())
+            })
+        
+        appid = search_result["appId"]
+        
+        # Step 2: Fetch ProtonDB and Deck status in parallel
+        tier, deck = await asyncio.gather(
+            self._fetch_protondb(session, appid),
+            self._fetch_deck_verified(session, appid)
+        )
+        
+        return (normalized, {
+            "tier": tier,
+            "deckVerified": deck,
+            "steamAppId": appid,
+            "timestamp": int(time.time())
+        })
+    
+    async def _fetch_all(self):
+        """Fetch all pending compat info in parallel batches."""
+        try:
+            import aiohttp
+            import ssl
+            
+            # Create SSL context (same as existing pattern)
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+            connector = aiohttp.TCPConnector(ssl=ssl_context, limit=10)
+            
+            cache = load_compat_cache()
+            batch_size = 5   # Reduced from 10 to avoid rate limits/timeouts
+            delay_ms = 200   # Increased from 50ms to 200ms for safer fetching
+            processed = 0
+            successful = 0
+            
+            logger.info(f"[CompatService] Fetching {len(self._pending_titles)} games in batches of {batch_size} (delay={delay_ms}ms)")
+            
+            async with aiohttp.ClientSession(connector=connector) as session:
+                for i in range(0, len(self._pending_titles), batch_size):
+                    batch = self._pending_titles[i:i + batch_size]
+                    
+                    # Fetch batch in parallel
+                    results = await asyncio.gather(
+                        *[self._get_compat_for_title(session, title) for title in batch],
+                        return_exceptions=True
+                    )
+                    
+                    # Process results
+                    for result in results:
+                        if isinstance(result, Exception):
+                            logger.error(f"[CompatService] Batch error: {result}")
+                            continue
+                        
+                        normalized, compat = result
+                        cache[normalized] = compat
+                        processed += 1
+                        
+                        if compat.get("tier") or compat.get("deckVerified") != "unknown":
+                            successful += 1
+                        
+                        logger.debug(f"[CompatService] Compat: \"{normalized}\" -> tier={compat.get('tier')}, deck={compat.get('deckVerified')}")
+                    
+                    # Save progress after each batch
+                    save_compat_cache(cache)
+                    
+                    # Log progress periodically
+                    if processed % 50 == 0 or i + batch_size >= len(self._pending_titles):
+                        logger.info(f"[CompatService] Progress: {processed}/{len(self._pending_titles)} ({successful} with ratings)")
+                    
+                    # Delay between batches
+                    if i + batch_size < len(self._pending_titles):
+                        await asyncio.sleep(delay_ms / 1000)
+            
+            logger.info(f"[CompatService] Complete: {len(self._pending_titles)} games, {successful} with ratings")
+            
+        except asyncio.CancelledError:
+            logger.info("[CompatService] Cancelled")
+        except Exception as e:
+            logger.error(f"[CompatService] Error: {e}")
+        finally:
+            self._running = False
+            self._pending_titles = []
 
 
 class BackgroundSizeFetcher:
@@ -5817,6 +6072,10 @@ class Plugin:
         # Auto-start if there are pending games from previous session
         self.size_fetcher.start()
 
+        # Initialize background compatibility fetcher (ProtonDB/Deck Verified)
+        logger.info("[INIT] Initializing BackgroundCompatFetcher")
+        self.compat_fetcher = BackgroundCompatFetcher()
+
         # Initialize SteamGridDB client with hardcoded API key
         self.steamgriddb_api_key = "1a410cb7c288b8f21016c2df4c81df74"
 
@@ -6084,6 +6343,11 @@ class Plugin:
                     }
                 self.sync_progress.total_games = len(all_games)
                 self.sync_progress.synced_games = 0
+
+                # Queue games for background compat fetching (ProtonDB/Deck Verified)
+                logger.info("Sync: Queueing games for compatibility lookup...")
+                self.compat_fetcher.queue_games(all_games)
+                self.compat_fetcher.start()  # Non-blocking background fetch
 
                 # Update progress: Checking installed status
                 self.sync_progress.status = "checking_installed"
@@ -6370,6 +6634,11 @@ class Plugin:
                     amazon_games = []
                 self.sync_progress.total_games = len(all_games)
                 self.sync_progress.synced_games = 0
+
+                # Queue games for background compat fetching (ProtonDB/Deck Verified)
+                logger.info("Force sync: Queueing games for compatibility lookup...")
+                self.compat_fetcher.queue_games(all_games)
+                self.compat_fetcher.start()  # Non-blocking background fetch
 
                 # Update progress: Checking installed status
                 self.sync_progress.status = "checking_installed"
@@ -7589,6 +7858,24 @@ class Plugin:
         except Exception as e:
             logger.error(f"Error getting Unifideck games: {e}")
             return []
+
+    async def get_compat_cache(self) -> Dict[str, Dict]:
+        """
+        Get the compatibility cache for frontend tab filtering.
+        
+        Returns the compat_cache.json contents which maps normalized game titles
+        to their ProtonDB tier and Steam Deck verified status.
+        
+        Returns:
+            Dict: {normalized_title: {tier, deckVerified, steamAppId, timestamp}}
+        """
+        try:
+            cache = load_compat_cache()
+            logger.info(f"Loaded {len(cache)} entries from compat cache for frontend")
+            return cache
+        except Exception as e:
+            logger.error(f"Error loading compat cache: {e}")
+            return {}
 
     async def set_steamgriddb_api_key(self, api_key: str) -> Dict[str, Any]:
         """Set SteamGridDB API key and initialize client"""

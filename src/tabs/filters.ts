@@ -212,6 +212,32 @@ export const filterFunctions: {
 };
 
 /**
+ * Get Steam's hidden collection containing hidden app IDs
+ * This is cached per-call since the collection is dynamic
+ */
+function getHiddenAppIds(): Set<number> {
+    try {
+        const collectionStore = (window as any).collectionStore;
+        const hiddenCollection = collectionStore?.GetCollection?.('hidden');
+        if (hiddenCollection?.allApps) {
+            return new Set(hiddenCollection.allApps.map((app: any) => app.appid));
+        }
+    } catch (e) {
+        console.error('[Unifideck] Error getting hidden collection:', e);
+    }
+    return new Set();
+}
+
+/**
+ * Check if a game is hidden by the user
+ * Uses Steam's 'hidden' collection which is updated dynamically
+ */
+export function isGameHidden(appId: number): boolean {
+    const hiddenIds = getHiddenAppIds();
+    return hiddenIds.has(appId);
+}
+
+/**
  * Runs a filter against an app
  */
 export function runFilter(filter: TabFilter, app: SteamAppOverview): boolean {
@@ -222,8 +248,14 @@ export function runFilter(filter: TabFilter, app: SteamAppOverview): boolean {
 
 /**
  * Runs multiple filters against an app (AND logic)
+ * Also excludes hidden games from all tabs/collections
  */
 export function runFilters(filters: TabFilter[], app: SteamAppOverview): boolean {
+    // Always exclude hidden games from all tabs
+    // Uses Steam's 'hidden' collection which updates dynamically
+    if (isGameHidden(app.appid)) {
+        return false;
+    }
     return filters.every(filter => runFilter(filter, app));
 }
 
@@ -235,5 +267,8 @@ declare global {
         app_type: number;
         installed: boolean;
         steam_deck_compat_category?: number;
+        // Steam sets this to false for hidden games
+        // Updated dynamically when user hides/unhides games
+        visible_in_game_list?: boolean;
     }
 }

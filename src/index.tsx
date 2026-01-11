@@ -6,7 +6,7 @@ import { FaGamepad, FaSync } from "react-icons/fa";
 // Import views
 
 // Import tab system
-import { patchLibrary } from "./tabs";
+import { patchLibrary, loadCompatCacheFromBackend } from "./tabs";
 
 import { syncUnifideckCollections } from "./spoofing/CollectionManager";
 
@@ -880,6 +880,12 @@ const Content: FC = () => {
       // Update collections ([Unifideck] Epic Games, etc.) with new games
       await syncUnifideckCollections().catch(err =>
         console.error("[Unifideck] Failed to sync collections:", err)
+      );
+
+      // Reload compat cache from backend (so Great on Deck tab updates immediately)
+      console.log("[Unifideck] Refreshing compat cache...");
+      await loadCompatCacheFromBackend().catch(err =>
+        console.error("[Unifideck] Failed to refresh compat cache:", err)
       );
 
       await checkStoreStatus();

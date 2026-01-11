@@ -6,7 +6,7 @@
  */
 
 import { TabFilter, runFilters, updateUnifideckCache, unifideckGameCache } from './filters';
-import { prefetchCompatByTitles } from './protondb';
+import { loadCompatCacheFromBackend } from './protondb';
 import { gamepadTabbedPageClasses } from '@decky/ui';
 import { call } from '@decky/api';
 import React, { ReactElement } from 'react';
@@ -265,17 +265,12 @@ class TabManager {
                 this.amazonGameCount = games.filter((g: any) => g.store === 'amazon').length;
                 console.log(`[Unifideck] Loaded ${games.length} games into cache (Epic: ${this.epicGameCount}, GOG: ${this.gogGameCount}, Amazon: ${this.amazonGameCount})`);
 
-                // Prefetch compatibility info (ProtonDB + Deck Verified) for Epic/GOG/Amazon games
-                const titles = games
-                    .filter((g: any) => g.title)
-                    .map((g: any) => g.title);
-                if (titles.length > 0) {
-                    console.log(`[Unifideck] Prefetching compatibility for ${titles.length} games...`);
-                    // Run in background - don't block tab initialization
-                    prefetchCompatByTitles(titles).catch((err: Error) =>
-                        console.error('[Unifideck] Compat prefetch error:', err)
-                    );
-                }
+                // Load compatibility cache from backend (ProtonDB + Deck Verified)
+                // Data is pre-fetched by Python during sync, no live API calls needed
+                console.log('[Unifideck] Loading compat cache from backend...');
+                loadCompatCacheFromBackend().catch((err: Error) =>
+                    console.error('[Unifideck] Compat cache load error:', err)
+                );
 
                 this.cacheLoaded = true;
             } else {
